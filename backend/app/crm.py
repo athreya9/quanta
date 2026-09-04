@@ -2,7 +2,7 @@ import os
 import httpx
 from datetime import datetime
 from typing import List, Dict, Any
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from app.models import Base, LeadDB, LeadCreate, LeadResponse
 
@@ -20,8 +20,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     os.makedirs(DB_DIR, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    
+    # Auto-migrate missing columns for SQLite quanta_crm.db
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE leads ADD COLUMN phone VARCHAR(50)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE leads ADD COLUMN problem_statement TEXT"))
+            conn.commit()
+        except Exception:
+            pass
 
-# Auto-initialize DB tables on startup
+# Auto-initialize DB tables & migrations on startup
 init_db()
 
 def get_db():
