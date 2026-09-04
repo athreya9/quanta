@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from app.models import Base, LeadDB, LeadCreate, LeadResponse
+from app.models import Base, LeadDB, LeadCreate, LeadResponse, ExtensionSignalDB, ExtensionIngestPayload
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_DIR = os.path.join(BASE_DIR, "db")
@@ -104,3 +104,17 @@ async def create_crm_lead(db: Session, lead_in: LeadCreate, ip_address: str, use
 
 def get_all_leads(db: Session, limit: int = 100) -> List[LeadDB]:
     return db.query(LeadDB).order_by(LeadDB.created_at.desc()).limit(limit).all()
+
+def create_extension_signal(db: Session, payload: ExtensionIngestPayload) -> ExtensionSignalDB:
+    db_signal = ExtensionSignalDB(
+        domain=payload.domain,
+        url=payload.url,
+        event_type=payload.event_type,
+        intent_score=payload.intent_score,
+        source=payload.source or "chrome_extension",
+        company=payload.company or f"Domain ({payload.domain})"
+    )
+    db.add(db_signal)
+    db.commit()
+    db.refresh(db_signal)
+    return db_signal

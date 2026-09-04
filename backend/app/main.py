@@ -9,8 +9,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.models import LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent
-from app.crm import init_db, get_db, create_crm_lead, get_all_leads
+from app.models import LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload
+from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
 from app.config import SLACK_WEBHOOK_URL
@@ -127,6 +127,49 @@ def get_intent_signals(domain: Optional[str] = None):
     """
     return generate_live_signals(domain=domain)
 
+@app.post("/api/v1/signals/extension-ingest")
+async def extension_ingest(
+    request: Request,
+    payload: ExtensionIngestPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Ingests Chrome extension signals directly into extension_signals table in quanta_crm.db
+    and triggers real-time Slack alerts for high intent events.
+    """
+    db_signal = create_extension_signal(db, payload)
+    
+    # Also record into leads table for CRM visibility
+    client_ip = request.headers.get("X-Forwarded-For") or request.client.host
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    clean_domain = payload.domain.replace("www.", "").lower()
+    lead_data = LeadCreate(
+        name="Chrome Extension Intercept",
+        email=f"intent@{clean_domain}",
+        company=payload.company or f"Domain ({payload.domain})",
+        role="Active Extension Prospect",
+        website=payload.url or f"https://{payload.domain}",
+        country="Extension Stream",
+        phone=None,
+        problem_statement=f"Chrome Extension captured active intent on '{payload.domain}' [{payload.event_type}]",
+        struggle=f"Extension signal capture on {payload.domain}"
+    )
+    await create_crm_lead(db, lead_data, client_ip, request.headers.get("User-Agent", "QUANTA Chrome Extension"))
+
+    if payload.intent_score >= 90:
+        background_tasks.add_task(
+            send_slack_alert,
+            company=payload.company or f"Target Domain ({payload.domain})",
+            event_type=payload.event_type,
+            description=f"🎯 Chrome Extension captured intent on target domain '{payload.domain}' URL: {payload.url or 'N/A'}",
+            intent_score=payload.intent_score,
+            source_url=payload.url or f"https://{payload.domain}"
+        )
+        
+    return {"status": "ingested", "signal_id": db_signal.id, "domain": payload.domain}
+
 @app.post("/api/v1/signals/capture-extension")
 async def capture_extension_event(
     request: Request,
@@ -138,38 +181,15 @@ async def capture_extension_event(
     Ingests Chrome extension domain intercepts directly into quanta_crm.db
     and triggers real-time Slack alerts for high intent events.
     """
-    client_ip = request.headers.get("X-Forwarded-For") or request.client.host
-    if "," in client_ip:
-        client_ip = client_ip.split(",")[0].strip()
-    
-    comp_name = event.company or f"Target Domain ({event.domain})"
-    clean_domain = event.domain.replace("www.", "").lower()
-    
-    lead_data = LeadCreate(
-        name="Chrome Extension Intercept",
-        email=f"intent@{clean_domain}",
-        company=comp_name,
-        role="Active Prospect",
-        website=event.url or f"https://{event.domain}",
-        country="Extension Stream",
-        phone=None,
-        problem_statement=f"Chrome Extension captured real-time intent on '{event.domain}' [{event.event_type}]",
-        struggle=f"Extension signal capture on {event.domain}"
+    payload = ExtensionIngestPayload(
+        domain=event.domain,
+        url=event.url,
+        event_type=event.event_type,
+        intent_score=event.intent_score,
+        source="chrome_extension",
+        company=event.company
     )
-    
-    db_lead = await create_crm_lead(db, lead_data, client_ip, request.headers.get("User-Agent", "QUANTA Chrome Extension"))
-    
-    if event.intent_score >= 90:
-        background_tasks.add_task(
-            send_slack_alert,
-            company=comp_name,
-            event_type=event.event_type,
-            description=f"🎯 Chrome Extension captured intent on target domain '{event.domain}' URL: {event.url or 'N/A'}",
-            intent_score=event.intent_score,
-            source_url=event.url or f"https://{event.domain}"
-        )
-        
-    return {"status": "captured", "lead_id": db_lead.id, "domain": event.domain}
+    return await extension_ingest(request, payload, background_tasks, db)
 
 @app.post("/api/v1/signals/test-alert", response_model=AlertTestResponse)
 async def trigger_test_alert(company: str = "Demo Prospect Corp"):

@@ -37,18 +37,20 @@
       company: company || domain,
       event_type: eventType || "CHROME_DOMAIN_INTERCEPT",
       url: window.location.href,
-      intent_score: intentScore || 95
+      timestamp: new Date().toISOString(),
+      intent_score: intentScore || 95,
+      source: "chrome_extension"
     };
 
     try {
-      let res = await fetch(`${API_HOST}/api/v1/signals/capture-extension`, {
+      let res = await fetch(`${API_HOST}/api/v1/signals/extension-ingest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       }).catch(() => null);
 
       if (!res || !res.ok) {
-        res = await fetch(`${LOCAL_HOST}/api/v1/signals/capture-extension`, {
+        res = await fetch(`${LOCAL_HOST}/api/v1/signals/extension-ingest`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -104,7 +106,7 @@
             <button class="quanta-close-btn" id="quanta-close">&times;</button>
           </div>
           <div class="quanta-badge-body" style="color: #94A3B8;">
-            No QUANTA signals detected for <strong>${domain}</strong> yet.
+            No QUANTA signals for this domain yet.
           </div>
           <div class="quanta-badge-actions">
             <button class="quanta-btn-track" id="quanta-track-domain">
@@ -168,7 +170,7 @@
     const domain = getNormalizedDomain();
     if (!domain) return;
 
-    // Check if domain is in ignore list (e.g. google, bing, github)
+    // Check if domain is in ignore list (e.g. google, bing, yahoo)
     const ignoreList = ['google.com', 'bing.com', 'yahoo.com', 'quanta.virtusol.com'];
     if (ignoreList.some(i => domain.includes(i))) {
       return;

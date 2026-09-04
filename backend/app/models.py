@@ -32,6 +32,21 @@ class LeadDB(Base):
     status = Column(String(50), default="NEW_QUALIFIED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class ExtensionSignalDB(Base):
+    """
+    SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
+    """
+    __tablename__ = "extension_signals"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    domain = Column(String(255), nullable=False, index=True)
+    url = Column(Text, nullable=True)
+    event_type = Column(String(100), default="CHROME_EXTENSION_INTERCEPT")
+    intent_score = Column(Integer, default=92)
+    source = Column(String(50), default="chrome_extension")
+    company = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class LeadCreate(BaseModel):
     name: str = Field(..., example="Alex Morgan")
     email: EmailStr = Field(..., example="alex@acmegrowth.com")
@@ -83,6 +98,15 @@ class ChromeExtensionEvent(BaseModel):
     event_type: str = "CHROME_EXTENSION_INTERCEPT"
     url: Optional[str] = None
     intent_score: int = 92
+
+class ExtensionIngestPayload(BaseModel):
+    domain: str
+    url: Optional[str] = None
+    timestamp: Optional[str] = None
+    event_type: str = "CHROME_EXTENSION_INTERCEPT"
+    intent_score: int = 92
+    source: str = "chrome_extension"
+    company: Optional[str] = None
 
 class AlertTestResponse(BaseModel):
     status: str
