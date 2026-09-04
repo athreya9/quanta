@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const descEl = document.getElementById('top-desc');
   const testBtn = document.getElementById('trigger-test-btn');
   const statusEl = document.getElementById('conn-status');
+  const modePill = document.getElementById('intent-mode-pill');
   const updateBanner = document.getElementById('update-banner');
   const updateMsg = document.getElementById('update-msg');
   const updateBtn = document.getElementById('update-ext-btn');
@@ -19,11 +20,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     extVerEl.textContent = `v${manifestVersion}`;
   }
 
-  async function checkExtensionVersion() {
+  async function checkExtensionVersionAndMode() {
     try {
       const res = await fetch(`${API_HOST}/api/v1/extension/version`);
       if (res.ok) {
         const data = await res.json();
+        if (data.intent_mode === 'demo') {
+          if (modePill) {
+            modePill.textContent = 'DEMO INTENT';
+            modePill.className = 'mode-pill mode-demo';
+          }
+        } else {
+          if (modePill) {
+            modePill.textContent = 'PRODUCTION INTENT';
+            modePill.className = 'mode-pill mode-production';
+          }
+        }
         if (data.latest_version && data.latest_version > manifestVersion) {
           updateMsg.textContent = `Version v${data.latest_version} available! (${data.changelog || 'New signal features'})`;
           updateBanner.style.display = 'block';
@@ -65,8 +77,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (signals && signals.length > 0) {
           companyEl.textContent = `${signals[0].company} (${signals[0].intent_score}% Intent)`;
           descEl.textContent = `[${signals[0].event_type}]: ${signals[0].description}`;
-          statusEl.textContent = 'MATCHED';
-          statusEl.style.color = '#34D399';
+          if (statusEl) {
+            statusEl.textContent = 'MATCHED';
+            statusEl.style.color = '#34D399';
+          }
           return;
         }
       }
@@ -77,13 +91,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (domain) {
       companyEl.textContent = `Active Domain: ${domain}`;
       descEl.textContent = `No active intent signals for ${domain} yet. Click below to initiate domain intent monitoring.`;
-      statusEl.textContent = 'MONITORING';
-      statusEl.style.color = '#FBBF24';
+      if (statusEl) {
+        statusEl.textContent = 'MONITORING';
+        statusEl.style.color = '#FBBF24';
+      }
     } else {
       companyEl.textContent = 'QUANTA Signal Stream Ready';
       descEl.textContent = 'Inspect any target company website to match real-time B2B buyer intent.';
-      statusEl.textContent = 'ONLINE';
-      statusEl.style.color = '#34D399';
+      if (statusEl) {
+        statusEl.textContent = 'ONLINE';
+        statusEl.style.color = '#34D399';
+      }
     }
   }
 
@@ -126,5 +144,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   loadDomainSignals();
-  checkExtensionVersion();
+  checkExtensionVersionAndMode();
 });

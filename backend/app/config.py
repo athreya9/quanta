@@ -20,3 +20,6 @@ else:
 SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
 PORT: int = int(os.getenv("PORT", 3002))
 ENV: str = os.getenv("ENV", "production")
+
+# INTENT_MODE can be 'production' (default) or 'demo'
+INTENT_MODE: str = os.getenv("INTENT_MODE", "production").lower().strip()

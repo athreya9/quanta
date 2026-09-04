@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from app.models import SignalItem
 from app.alerts import send_slack_alert
+from app.config import INTENT_MODE
 
 logger = logging.getLogger("quanta.signals")
 
-# Real Signal Sources: Tech Stack (BuiltWith/Wappalyzer), Hiring (Greenhouse/LinkedIn), Pricing Telemetry, Exec Hires, Crunchbase Funding
-SAMPLE_SIGNALS = [
+# Synthetic sample signals used ONLY in demo mode
+SAMPLE_DEMO_SIGNALS = [
     {
         "id": "sig_101",
         "company": "Stripe Competitor Corp",
@@ -20,14 +21,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://stripe-comp.com/web-analytics",
         "intent_score": 96,
         "category": "TECH_STACK_CHANGE",
-        "source": "backend_ingestion",
+        "source": "demo_sample",
         "location": "San Francisco, CA",
         "geo_location": "San Francisco, CA, USA",
         "action_playbook": "Trigger Executive Outreach + Slack Alert #growth-leads",
         "tech_stack_signals": ["Installed QUANTA Intent Webhook API", "Removed Legacy Google Universal Analytics", "Added Segment Enterprise CDN"],
         "hiring_signals": ["Senior Sales Engineer (Greenhouse)", "Outbound SDR Lead (LinkedIn)"],
         "pricing_page_behavior": "4 concurrent HQ IPs spent 18 mins on /enterprise-pricing matrix",
-        "funding_signals": "Series B ($35M) led by Sequoia Capital"
+        "funding_signals": "Series B ($35M) led by Sequoia Capital",
+        "demo_sample": True
     },
     {
         "id": "sig_102",
@@ -39,14 +41,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://linkedin.com/company/nexus-b2b/jobs",
         "intent_score": 92,
         "category": "EXEC_HIRE",
-        "source": "backend_ingestion",
+        "source": "demo_sample",
         "location": "Austin, TX",
         "geo_location": "Austin, TX, USA",
         "action_playbook": "Dispatch RevOps acceleration playbook via Chrome Extension",
         "tech_stack_signals": ["Salesforce Enterprise CRM", "Outreach.io", "Gong.io"],
         "hiring_signals": ["VP of Revenue Operations (LinkedIn Public Signal)", "Head of SDRs (Greenhouse)"],
         "pricing_page_behavior": "6 visits to competitor breakdown table in past 24 hours",
-        "funding_signals": "Series A ($12M) - Accelerating RevOps tooling"
+        "funding_signals": "Series A ($12M) - Accelerating RevOps tooling",
+        "demo_sample": True
     },
     {
         "id": "sig_103",
@@ -58,14 +61,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://apexfinancial.com/pricing",
         "intent_score": 98,
         "category": "PRICING_PAGE",
-        "source": "pricing_page",
+        "source": "demo_sample",
         "location": "London, UK",
         "geo_location": "London, Greater London, UK",
         "action_playbook": "Auto-assign High-Priority SDR & send Slack Ping",
         "tech_stack_signals": ["Marketo Enterprise", "HubSpot Sales Hub Pro", "React 18 PWA"],
         "hiring_signals": ["Enterprise SDR - FinTech (Indeed)"],
         "pricing_page_behavior": "8 concurrent IPs from corporate HQ spent 14 minutes evaluating enterprise tier pricing comparison matrix",
-        "funding_signals": "Growth Equity Round ($45M)"
+        "funding_signals": "Growth Equity Round ($45M)",
+        "demo_sample": True
     },
     {
         "id": "sig_104",
@@ -77,14 +81,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://vanguardtech.io/openings",
         "intent_score": 88,
         "category": "JOB_POST",
-        "source": "backend_ingestion",
+        "source": "demo_sample",
         "location": "Chicago, IL",
         "geo_location": "Chicago, IL, USA",
         "action_playbook": "Enroll in RevOps Acceleration campaign",
         "tech_stack_signals": ["Salesforce CRM", "HubSpot Marketing Pro"],
         "hiring_signals": ["6 open roles on Greenhouse & Indeed in 24 hours (Outbound SDR, RevOps Mgr)"],
         "pricing_page_behavior": "2 pricing page visits from HQ domain",
-        "funding_signals": "Series A ($10M)"
+        "funding_signals": "Series A ($10M)",
+        "demo_sample": True
     },
     {
         "id": "sig_105",
@@ -96,14 +101,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://hyperscale.ai/press",
         "intent_score": 95,
         "category": "FUNDING",
-        "source": "backend_ingestion",
+        "source": "demo_sample",
         "location": "New York, NY",
         "geo_location": "New York, NY, USA",
         "action_playbook": "Trigger Founders Outreach Playbook",
         "tech_stack_signals": ["Next.js", "Python FastAPI", "Segment Analytics"],
         "hiring_signals": ["Head of Growth", "Enterprise Account Executive"],
         "pricing_page_behavior": "5 pricing page visits from investor & executive IPs",
-        "funding_signals": "Closed $18.5M Series A round (Crunchbase Public Signal)"
+        "funding_signals": "Closed $18.5M Series A round (Crunchbase Public Signal)",
+        "demo_sample": True
     },
     {
         "id": "sig_106",
@@ -115,14 +121,15 @@ SAMPLE_SIGNALS = [
         "source_url": "https://cloudscale.io/compare",
         "intent_score": 94,
         "category": "PRICING_PAGE",
-        "source": "chrome_extension",
+        "source": "demo_sample",
         "location": "Seattle, WA",
         "geo_location": "Seattle, WA, USA",
         "action_playbook": "Dispatch Rep Overlay & Ping #quanta-alerts",
         "tech_stack_signals": ["BuiltWith Detection: Wappalyzer Webhooks", "HubSpot Sales Hub"],
         "hiring_signals": ["Senior Sales Development Rep (LinkedIn)"],
         "pricing_page_behavior": "4 executive IPs from corporate HQ hit competitor feature breakdown page 3 times in 15 mins",
-        "funding_signals": "Series C ($60M)"
+        "funding_signals": "Series C ($60M)",
+        "demo_sample": True
     }
 ]
 
@@ -139,14 +146,20 @@ def normalize_domain(domain: str) -> str:
 
 def generate_live_signals(domain: Optional[str] = None) -> List[SignalItem]:
     """
-    Returns enriched intent micro-signals.
-    Filter by query parameter ?domain=<domain_name> if provided.
+    Returns intent micro-signals.
+    In PRODUCTION mode (INTENT_MODE == 'production'), synthetic demo signals are disabled.
+    In DEMO mode (INTENT_MODE == 'demo'), sample demo signals are returned with demo_sample = True.
     """
     signals = []
+    
+    # In production mode, do NOT include synthetic demo signals
+    if INTENT_MODE == "production":
+        return []
+
     now = datetime.now()
     norm_query = normalize_domain(domain) if domain else ""
 
-    for idx, s in enumerate(SAMPLE_SIGNALS):
+    for idx, s in enumerate(SAMPLE_DEMO_SIGNALS):
         # Filter domain if query provided
         if norm_query:
             matched = False
@@ -176,10 +189,11 @@ def generate_live_signals(domain: Optional[str] = None) -> List[SignalItem]:
                 timestamp=timestamp_str,
                 intent_score=s["intent_score"],
                 category=s["category"],
-                source=s.get("source", "backend_ingestion"),
+                source="demo_sample",
                 location=s["location"],
                 geo_location=s.get("geo_location", s["location"]),
                 action_playbook=s["action_playbook"],
+                demo_sample=True,
                 tech_stack_signals=s.get("tech_stack_signals"),
                 hiring_signals=s.get("hiring_signals"),
                 pricing_page_behavior=s.get("pricing_page_behavior"),
@@ -190,10 +204,11 @@ def generate_live_signals(domain: Optional[str] = None) -> List[SignalItem]:
 
 async def dispatch_high_intent_alerts(signals: List[SignalItem]):
     """
-    Scans signals and dispatches Slack notifications for signals with intent_score >= 90.
+    Dispatches Slack notifications for real signals (demo_sample = False) with intent_score >= 90.
+    Never dispatches alerts for demo synthetic signals.
     """
     for sig in signals:
-        if sig.intent_score >= 90:
+        if not sig.demo_sample and sig.intent_score >= 90:
             try:
                 await send_slack_alert(
                     company=sig.company,

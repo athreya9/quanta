@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -30,6 +30,7 @@ class LeadDB(Base):
     user_agent = Column(Text, nullable=True)
     intent_score = Column(Float, default=85.0)
     status = Column(String(50), default="NEW_QUALIFIED")
+    demo_sample = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class ExtensionSignalDB(Base):
@@ -48,6 +49,7 @@ class ExtensionSignalDB(Base):
     geo_location = Column(String(255), nullable=True)
     browser_fingerprint = Column(Text, nullable=True)
     enrichment_metadata = Column(Text, nullable=True)
+    demo_sample = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class LeadCreate(BaseModel):
@@ -60,6 +62,7 @@ class LeadCreate(BaseModel):
     phone: Optional[str] = Field(None, example="+1 (555) 234-5678")
     problem_statement: Optional[str] = Field(None, example="Missing high-intent buyers visiting competitor pricing tables.")
     struggle: Optional[str] = Field(None, example="Alternative field for problem statement.")
+    demo_sample: Optional[bool] = False
 
 class LeadResponse(BaseModel):
     id: int
@@ -76,6 +79,7 @@ class LeadResponse(BaseModel):
     geo_location: Optional[str] = None
     intent_score: float
     status: str
+    demo_sample: bool = False
     created_at: datetime.datetime
 
     class Config:
@@ -97,6 +101,7 @@ class SignalItem(BaseModel):
     location: Optional[str] = None
     geo_location: Optional[str] = None
     action_playbook: Optional[str] = None
+    demo_sample: bool = False
     # Step 5 Full Enrichment Signals
     tech_stack_signals: Optional[List[str]] = None
     hiring_signals: Optional[List[str]] = None
@@ -111,6 +116,7 @@ class ChromeExtensionEvent(BaseModel):
     intent_score: int = 92
     browser_fingerprint: Optional[str] = None
     source: Optional[str] = "chrome_extension"
+    demo_sample: Optional[bool] = False
 
 class ExtensionIngestPayload(BaseModel):
     domain: str
@@ -122,6 +128,7 @@ class ExtensionIngestPayload(BaseModel):
     company: Optional[str] = None
     geo_location: Optional[str] = None
     browser_fingerprint: Optional[str] = None
+    demo_sample: Optional[bool] = False
 
 class AlertTestResponse(BaseModel):
     status: str
@@ -129,3 +136,4 @@ class AlertTestResponse(BaseModel):
     company: str
     intent_score: int
     message: str
+    mode: str = "production"

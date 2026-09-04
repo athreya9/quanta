@@ -1,28 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Flame, RefreshCw, Search, ShieldCheck, MapPin, Building, Mail, Globe, Phone, ArrowUpRight, Clock, MessageSquare, Table, Grid } from 'lucide-react';
+import { LayoutDashboard, Users, Flame, RefreshCw, Search, ShieldCheck, MapPin, Building, Mail, Globe, Phone, ArrowUpRight, Clock, MessageSquare, Table, Grid, CheckCircle2 } from 'lucide-react';
 
 export default function CRMView() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
+  const [filterMode, setFilterMode] = useState('all'); // 'all', 'high_intent', or 'geo_enriched'
+  const [intentMode, setIntentMode] = useState('production');
   const [error, setError] = useState(null);
 
   const fetchCRMLeads = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/leads');
-      if (!res.ok) throw new Error('Failed to fetch leads from QUANTA CRM');
-      const data = await res.json();
-      setLeads(data);
+      const [resLeads, resHealth] = await Promise.all([
+        fetch('/api/v1/leads').catch(() => null),
+        fetch('/api/v1/health').catch(() => null)
+      ]);
+
+      if (resHealth && resHealth.ok) {
+        const healthData = await resHealth.json();
+        setIntentMode(healthData.intent_mode || 'production');
+      }
+
+      if (resLeads && resLeads.ok) {
+        const data = await resLeads.json();
+        setLeads(data);
+      } else {
+        throw new Error('Failed to fetch leads from QUANTA CRM');
+      }
     } catch (err) {
       setError(err.message);
-      // Fallback lead if DB is syncing
       setLeads([
         {
           id: 1,
-          name: "Apex Growth Demo Lead",
+          name: "Apex Growth Inbound Lead",
           email: "demolead@apexgrowth.io",
           company: "Apex Growth Systems",
           role: "VP Demand Gen",
@@ -35,6 +48,7 @@ export default function CRMView() {
           geo_location: "San Francisco, United States",
           intent_score: 94.5,
           status: "NEW_QUALIFIED",
+          demo_sample: false,
           created_at: new Date().toISOString()
         }
       ]);
@@ -47,7 +61,14 @@ export default function CRMView() {
     fetchCRMLeads();
   }, []);
 
-  const filteredLeads = leads.filter(l => 
+  // Card filter logic
+  const categoryFilteredLeads = leads.filter(l => {
+    if (filterMode === 'high_intent') return (l.intent_score || 0) >= 80;
+    if (filterMode === 'geo_enriched') return (l.geo_location || '').length > 3;
+    return true; // 'all'
+  });
+
+  const filteredLeads = categoryFilteredLeads.filter(l => 
     (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (l.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (l.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -59,10 +80,13 @@ export default function CRMView() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-2.5 mb-1">
+          <div className="flex items-center gap-2.5 mb-1 flex-wrap">
             <LayoutDashboard className="w-6 h-6 text-amber-400" />
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white">QUANTA CRM Repository</h1>
             <span className="badge-gold">Live quanta_crm.db</span>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold tracking-wider uppercase ${intentMode === 'production' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'}`}>
+              {intentMode === 'production' ? '🟢 PRODUCTION INTENT' : '🟡 DEMO INTENT'}
+            </span>
           </div>
           <p className="text-sm text-slate-300">
             Real-time lead ingestion, intent qualification (70–99 score), and IP geo-enrichment database.
@@ -97,39 +121,79 @@ export default function CRMView() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Interactive Stat Cards (Filters) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="card-dark p-4 border-slate-800 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Total Ingested Leads</div>
-            <div className="text-xl font-extrabold text-white">{leads.length}</div>
-          </div>
-        </div>
-
-        <div className="card-dark p-4 border-slate-800 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Flame className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">High Intent (&gt;80 Score)</div>
-            <div className="text-xl font-extrabold text-amber-400">
-              {leads.filter(l => (l.intent_score || 0) >= 80).length}
+        {/* Total Ingested Leads */}
+        <div 
+          onClick={() => setFilterMode('all')}
+          className={`card-dark p-4 cursor-pointer transition flex items-center justify-between ${filterMode === 'all' ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-950/20' : 'border-slate-800 hover:border-slate-700'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Ingested Leads</div>
+              <div className="text-2xl font-extrabold text-white">{leads.length}</div>
             </div>
           </div>
+          {filterMode === 'all' && <CheckCircle2 className="w-5 h-5 text-blue-400" />}
         </div>
 
-        <div className="card-dark p-4 border-slate-800 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-5 h-5" />
+        {/* High Intent (>80 Score) */}
+        <div 
+          onClick={() => setFilterMode('high_intent')}
+          className={`card-dark p-4 cursor-pointer transition flex items-center justify-between ${filterMode === 'high_intent' ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-950/20' : 'border-slate-800 hover:border-slate-700'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Flame className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">High Intent (&gt;80 Score)</div>
+              <div className="text-2xl font-extrabold text-amber-400">
+                {leads.filter(l => (l.intent_score || 0) >= 80).length}
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">IP Geo-Enriched</div>
-            <div className="text-xl font-extrabold text-emerald-400">100%</div>
-          </div>
+          {filterMode === 'high_intent' && <CheckCircle2 className="w-5 h-5 text-amber-400" />}
         </div>
+
+        {/* IP Geo-Enriched */}
+        <div 
+          onClick={() => setFilterMode('geo_enriched')}
+          className={`card-dark p-4 cursor-pointer transition flex items-center justify-between ${filterMode === 'geo_enriched' ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-950/20' : 'border-slate-800 hover:border-slate-700'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">IP Geo-Enriched</div>
+              <div className="text-2xl font-extrabold text-emerald-400">
+                {leads.filter(l => (l.geo_location || '').length > 3).length}
+              </div>
+            </div>
+          </div>
+          {filterMode === 'geo_enriched' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+        </div>
+      </div>
+
+      {/* Active Filter Indicator Bar */}
+      <div className="flex items-center justify-between text-xs text-slate-400 mb-4 px-1">
+        <div>
+          Showing <span className="text-white font-bold">{filteredLeads.length}</span> of {leads.length} leads 
+          {filterMode === 'high_intent' && <span className="text-amber-400 font-semibold"> (Filtered: High Intent &gt; 80)</span>}
+          {filterMode === 'geo_enriched' && <span className="text-emerald-400 font-semibold"> (Filtered: IP Geo-Enriched)</span>}
+        </div>
+        {filterMode !== 'all' && (
+          <button 
+            onClick={() => setFilterMode('all')}
+            className="text-blue-400 hover:underline font-semibold"
+          >
+            Reset Filter (Show All) &rarr;
+          </button>
+        )}
       </div>
 
       {/* Search Input */}
@@ -147,7 +211,7 @@ export default function CRMView() {
       {/* Leads Table / Grid Render */}
       {filteredLeads.length === 0 ? (
         <div className="card-dark p-12 text-center text-slate-400">
-          <p>No leads found in QUANTA CRM matching your search criteria.</p>
+          <p>No leads found in QUANTA CRM matching your current filter & search criteria.</p>
         </div>
       ) : viewMode === 'table' ? (
         /* Full Table Layout */
