@@ -26,9 +26,11 @@ def init_db():
         for col_stmt in [
             "ALTER TABLE leads ADD COLUMN phone VARCHAR(50)",
             "ALTER TABLE leads ADD COLUMN problem_statement TEXT",
+            "ALTER TABLE leads ADD COLUMN demo_sample BOOLEAN DEFAULT 0",
             "ALTER TABLE extension_signals ADD COLUMN geo_location VARCHAR(255)",
             "ALTER TABLE extension_signals ADD COLUMN browser_fingerprint TEXT",
-            "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT"
+            "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT",
+            "ALTER TABLE extension_signals ADD COLUMN demo_sample BOOLEAN DEFAULT 0"
         ]:
             try:
                 conn.execute(text(col_stmt))
@@ -97,6 +99,7 @@ async def create_crm_lead(db: Session, lead_in: LeadCreate, ip_address: str, use
         geo_location=geo_location,
         user_agent=user_agent,
         intent_score=intent_score,
+        demo_sample=lead_in.demo_sample or False,
         status="NEW_QUALIFIED" if intent_score >= 80 else "NEW"
     )
     db.add(db_lead)
@@ -116,7 +119,8 @@ def create_extension_signal(db: Session, payload: ExtensionIngestPayload) -> Ext
         source=payload.source or "chrome_extension",
         company=payload.company or f"Domain ({payload.domain})",
         geo_location=payload.geo_location,
-        browser_fingerprint=payload.browser_fingerprint
+        browser_fingerprint=payload.browser_fingerprint,
+        demo_sample=payload.demo_sample or False
     )
     db.add(db_signal)
     db.commit()
