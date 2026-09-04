@@ -3,8 +3,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   const descEl = document.getElementById('top-desc');
   const testBtn = document.getElementById('trigger-test-btn');
   const statusEl = document.getElementById('conn-status');
+  const updateBanner = document.getElementById('update-banner');
+  const updateMsg = document.getElementById('update-msg');
+  const updateBtn = document.getElementById('update-ext-btn');
+  const forceReloadBtn = document.getElementById('force-reload-btn');
+  const extVerEl = document.getElementById('ext-ver');
 
   const API_HOST = 'https://quanta.virtusol.com';
+
+  const manifestVersion = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) 
+    ? chrome.runtime.getManifest().version 
+    : '1.1.0';
+
+  if (extVerEl) {
+    extVerEl.textContent = `v${manifestVersion}`;
+  }
+
+  async function checkExtensionVersion() {
+    try {
+      const res = await fetch(`${API_HOST}/api/v1/extension/version`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.latest_version && data.latest_version > manifestVersion) {
+          updateMsg.textContent = `Version v${data.latest_version} available! (${data.changelog || 'New signal features'})`;
+          updateBanner.style.display = 'block';
+        }
+      }
+    } catch (e) {
+      console.log('Version check skipped:', e);
+    }
+  }
 
   async function getActiveDomain() {
     try {
@@ -78,5 +106,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  if (forceReloadBtn) {
+    forceReloadBtn.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.reload) {
+        chrome.runtime.reload();
+      } else {
+        window.location.reload();
+      }
+    });
+  }
+
+  if (updateBtn) {
+    updateBtn.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.reload) {
+        chrome.runtime.reload();
+      }
+      window.open(`${API_HOST}/extension/quanta-extension.zip`, '_blank');
+    });
+  }
+
   loadDomainSignals();
+  checkExtensionVersion();
 });

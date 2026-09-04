@@ -48,6 +48,22 @@ def health_check():
         "timestamp": os.popen("date -u").read().strip()
     }
 
+@app.get("/api/v1/extension/version")
+def get_extension_version():
+    """Returns latest extension version telemetry and auto-update status."""
+    return {
+        "version": "1.1.0",
+        "latest_version": "1.1.0",
+        "download_url": "https://quanta.virtusol.com/extension/quanta-extension.zip",
+        "update_available": False,
+        "features": [
+            "Real-time domain matching engine",
+            "Custom 3D infinity loop icons",
+            "Automatic CRM event capture",
+            "Real-time Slack webhooks"
+        ]
+    }
+
 @app.api_route("/extension/quanta-extension.zip", methods=["GET", "HEAD"])
 def download_extension_zip():
     """Download endpoint for the packaged QUANTA Chrome Extension ZIP."""
