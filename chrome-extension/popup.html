@@ -20,9 +20,18 @@
       padding-bottom: 12px;
       margin-bottom: 12px;
     }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-img {
+      width: 22px;
+      height: 22px;
+    }
     .logo-title {
       font-weight: 800;
-      font-size: 15px;
+      font-size: 14px;
       background: linear-gradient(135deg, #00F0FF 0%, #FF9900 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -37,10 +46,10 @@
       color: #34D399;
     }
     .signal-card {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(0, 240, 255, 0.2);
-      border-radius: 8px;
-      padding: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 10px;
+      padding: 14px;
       margin-bottom: 12px;
     }
     .signal-company {
@@ -52,7 +61,7 @@
     .signal-desc {
       font-size: 11px;
       color: #94A3B8;
-      line-height: 1.4;
+      line-height: 1.45;
     }
     .btn {
       width: 100%;
@@ -61,7 +70,7 @@
       border: none;
       padding: 10px;
       border-radius: 6px;
-      font-weight: 600;
+      font-weight: 700;
       font-size: 12px;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
@@ -74,13 +83,20 @@
 </head>
 <body>
   <div class="header">
-    <div class="logo-title">QUANTA INTENT ENGINE</div>
-    <div class="status-pill" id="conn-status">CONNECTED</div>
+    <div class="brand-wrap">
+      <img src="icon48.png" class="logo-img" alt="QUANTA Logo">
+      <div class="logo-title">QUANTA INTENT ENGINE</div>
+    </div>
+    <div class="status-pill" id="conn-status">ONLINE</div>
   </div>
 
   <div class="signal-card">
-    <div class="signal-company" id="top-company">Loading intent stream...</div>
-    <div class="signal-desc" id="top-desc">Connecting to https://quanta.virtusol.com/api/v1/signals</div>
+    <div className="signal-company" id="top-company" style="font-weight:700; font-size:13px; color:#F8FAFC; margin-bottom:4px;">
+      Checking Active Domain...
+    </div>
+    <div class="signal-desc" id="top-desc">
+      Connecting to QUANTA Signal Engine at https://quanta.virtusol.com
+    </div>
   </div>
 
   <button class="btn" id="trigger-test-btn">⚡ Dispatch Test Slack & Overlay Alert</button>

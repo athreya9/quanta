@@ -77,6 +77,13 @@ class SignalItem(BaseModel):
     location: Optional[str] = None
     action_playbook: Optional[str] = None
 
+class ChromeExtensionEvent(BaseModel):
+    domain: str
+    company: Optional[str] = None
+    event_type: str = "CHROME_EXTENSION_INTERCEPT"
+    url: Optional[str] = None
+    intent_score: int = 92
+
 class AlertTestResponse(BaseModel):
     status: str
     channel: str

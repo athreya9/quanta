@@ -1,7 +1,8 @@
 import random
 import logging
+import re
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 from app.models import SignalItem
 from app.alerts import send_slack_alert
 
@@ -11,9 +12,10 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_101",
         "company": "Stripe Competitor Corp",
+        "domains": ["stripe-comp.com", "stripe.com", "stripe-competitor.com", "stripe-comp"],
         "event_type": "TECH_STACK_CHANGE",
         "description": "Removed legacy tracking scripts and installed custom intent webhook API on enterprise pricing path.",
-        "source_url": "https://github.com/stripe-comp/web-analytics",
+        "source_url": "https://stripe-comp.com/web-analytics",
         "intent_score": 96,
         "category": "TECH_STACK_CHANGE",
         "location": "San Francisco, CA",
@@ -22,9 +24,10 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_102",
         "company": "Nexus B2B SaaS",
+        "domains": ["nexusb2b.com", "nexus.com", "nexus-b2b.com", "nexusb2b"],
         "event_type": "EXEC_HIRE",
         "description": "Appointed new VP of Revenue Operations (ex-Gong, ex-Salesforce) to scale GTM engine.",
-        "source_url": "https://linkedin.com/company/nexus-b2b/jobs",
+        "source_url": "https://nexusb2b.com/careers",
         "intent_score": 92,
         "category": "EXEC_HIRE",
         "location": "Austin, TX",
@@ -33,6 +36,7 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_103",
         "company": "Apex Financial Software",
+        "domains": ["apexfinancial.com", "apex.com", "apexfinancial"],
         "event_type": "PRICING_PAGE",
         "description": "8 concurrent IPs from corporate HQ spent 14 minutes evaluating enterprise tier pricing comparison matrix.",
         "source_url": "https://apexfinancial.com/pricing",
@@ -44,9 +48,10 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_104",
         "company": "Vanguard Tech Inc.",
+        "domains": ["vanguardtech.io", "vanguard.com", "vanguardtech"],
         "event_type": "JOB_POST",
         "description": "Posted 6 open roles for 'Outbound Sales Development Rep' & 'Salesforce Administrator' in 24 hours.",
-        "source_url": "https://careers.vanguardtech.io/openings",
+        "source_url": "https://vanguardtech.io/openings",
         "intent_score": 88,
         "category": "JOB_POST",
         "location": "Chicago, IL",
@@ -55,9 +60,10 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_105",
         "company": "HyperScale AI",
+        "domains": ["hyperscale.ai", "hyperscale.com", "hyperscale"],
         "event_type": "FUNDING",
         "description": "Closed $18.5M Series A funding round. Allocating budget for sales intelligence stack.",
-        "source_url": "https://techcrunch.com/hyperscale-ai-series-a",
+        "source_url": "https://hyperscale.ai/press",
         "intent_score": 95,
         "category": "FUNDING",
         "location": "New York, NY",
@@ -66,6 +72,7 @@ SAMPLE_SIGNALS = [
     {
         "id": "sig_106",
         "company": "CloudScale Systems",
+        "domains": ["cloudscale.io", "cloudscale.com", "cloudscale"],
         "event_type": "PRICING_PAGE",
         "description": "4 executive IPs from corporate HQ hit competitor feature breakdown page 3 times in 15 mins.",
         "source_url": "https://cloudscale.io/compare",
@@ -76,10 +83,41 @@ SAMPLE_SIGNALS = [
     }
 ]
 
-def generate_live_signals() -> List[SignalItem]:
+def normalize_domain(domain: str) -> str:
+    """Strip http, https, www, port, path, subdomains for matching."""
+    if not domain:
+        return ""
+    d = domain.lower().strip()
+    d = re.sub(r'^https?://', '', d)
+    d = d.split('/')[0].split(':')[0]
+    if d.startswith('www.'):
+        d = d[4:]
+    return d
+
+def generate_live_signals(domain: Optional[str] = None) -> List[SignalItem]:
+    """
+    Returns live intent micro-signals.
+    If `domain` query param is supplied, filters signals matching that domain.
+    If domain is supplied but has no signals, returns empty list [].
+    """
     signals = []
     now = datetime.now()
+    norm_query = normalize_domain(domain) if domain else ""
+
     for idx, s in enumerate(SAMPLE_SIGNALS):
+        # Match domain if query provided
+        if norm_query:
+            matched = False
+            for d in s.get("domains", []):
+                if norm_query in d or d in norm_query:
+                    matched = True
+                    break
+            # Also match company name parts
+            if not matched and norm_query.split('.')[0] in s["company"].lower().replace(' ', ''):
+                matched = True
+            if not matched:
+                continue
+
         time_offset = idx * 6 + random.randint(1, 3)
         detected_str = f"{time_offset}m ago" if time_offset > 0 else "Just now"
         timestamp_str = (now - timedelta(minutes=time_offset)).strftime("%H:%M:%S UTC")

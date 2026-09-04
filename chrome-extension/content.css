@@ -10,15 +10,23 @@
 }
 
 .quanta-badge-container {
-  background: rgba(11, 16, 32, 0.92);
-  border: 1px solid rgba(0, 240, 255, 0.4);
+  background: rgba(11, 16, 32, 0.94);
   border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.25);
-  backdrop-filter: blur(12px);
-  max-width: 340px;
-  animation: quantaSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 14px 16px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 240, 255, 0.2);
+  backdrop-filter: blur(16px);
+  max-width: 350px;
+  animation: quantaSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   transition: all 0.3s ease;
+}
+
+.quanta-matched {
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 240, 255, 0.3);
+}
+
+.quanta-unmatched {
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 @keyframes quantaSlideIn {
@@ -37,15 +45,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .quanta-badge-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: 800;
+  font-size: 12px;
   letter-spacing: 0.5px;
   background: linear-gradient(135deg, #00F0FF 0%, #FF9900 100%);
   -webkit-background-clip: text;
@@ -53,34 +61,80 @@
 }
 
 .quanta-badge-score {
-  background: rgba(16, 185, 129, 0.2);
-  border: 1px solid rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.6);
   color: #34D399;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.quanta-badge-score-muted {
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94A3B8;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
   border-radius: 20px;
 }
 
 .quanta-badge-body {
   font-size: 12px;
   color: #CBD5E1;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  line-height: 1.5;
 }
 
-.quanta-badge-footer {
+.quanta-badge-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 6px;
+  gap: 8px;
+  padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quanta-btn-action {
+  background: linear-gradient(135deg, #00F0FF 0%, #2563EB 100%);
+  color: #FFFFFF;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
   font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 240, 255, 0.3);
+  transition: all 0.2s ease;
+}
+
+.quanta-btn-action:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.quanta-btn-track {
+  background: rgba(255, 153, 0, 0.2);
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  color: #FFB74D;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quanta-btn-track:hover {
+  background: rgba(255, 153, 0, 0.35);
 }
 
 .quanta-link {
   color: #00F0FF;
   text-decoration: none;
   font-weight: 600;
+  font-size: 11px;
 }
 .quanta-link:hover {
   text-decoration: underline;
@@ -91,7 +145,7 @@
   border: none;
   color: #64748B;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   padding: 0 4px;
 }
 .quanta-close-btn:hover {
