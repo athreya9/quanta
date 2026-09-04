@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, AlertCircle, ShieldCheck, Sparkles, LayoutDashboard } from 'lucide-react';
+import { Send, CheckCircle2, AlertCircle, ShieldCheck, Sparkles, LayoutDashboard, Phone } from 'lucide-react';
 
 export default function LeadForm({ setActiveTab }) {
   const [formData, setFormData] = useState({
@@ -9,7 +9,8 @@ export default function LeadForm({ setActiveTab }) {
     role: '',
     website: '',
     country: 'United States',
-    struggle: ''
+    phone: '',
+    problem_statement: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -30,15 +31,21 @@ export default function LeadForm({ setActiveTab }) {
       const response = await fetch('/api/v1/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          struggle: formData.problem_statement // Send both for compatibility
+        })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit enquiry. Please try again.');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to submit enquiry to QUANTA CRM.');
       }
 
       const leadResult = await response.json();
       setSuccessLead(leadResult);
+      
+      // Clear form after success
       setFormData({
         name: '',
         email: '',
@@ -46,7 +53,8 @@ export default function LeadForm({ setActiveTab }) {
         role: '',
         website: '',
         country: 'United States',
-        struggle: ''
+        phone: '',
+        problem_statement: ''
       });
     } catch (err) {
       setErrorMsg(err.message || 'Error connecting to QUANTA CRM backend.');
@@ -70,22 +78,22 @@ export default function LeadForm({ setActiveTab }) {
           </p>
         </div>
 
-        {/* Success Alert */}
+        {/* Success Alert Toast */}
         {successLead && (
-          <div className="mb-8 p-6 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-left space-y-4">
+          <div className="mb-8 p-6 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-left space-y-4 shadow-xl">
             <div className="flex items-center gap-3 text-emerald-400">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>
                 <h4 className="font-bold text-base text-white">Lead Successfully Ingested into QUANTA CRM</h4>
-                <p className="text-xs text-emerald-300">ID #{successLead.id} | Intent Score: {successLead.intent_score}/100</p>
+                <p className="text-xs text-emerald-300">ID #{successLead.id} | Intent Score: {successLead.intent_score}/100 | Status: {successLead.status}</p>
               </div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-slate-300 font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-900/90 p-3 rounded-lg border border-slate-800 text-slate-300 font-mono">
               <div><span className="text-slate-500">Name:</span> {successLead.name}</div>
               <div><span className="text-slate-500">Company:</span> {successLead.company}</div>
+              <div><span className="text-slate-500">Phone:</span> {successLead.phone || 'N/A'}</div>
               <div><span className="text-slate-500">IP Geo:</span> {successLead.geo_location}</div>
-              <div><span className="text-slate-500">Status:</span> {successLead.status}</div>
             </div>
 
             <div className="pt-2 flex justify-end">
@@ -100,9 +108,9 @@ export default function LeadForm({ setActiveTab }) {
           </div>
         )}
 
-        {/* Error Alert */}
+        {/* Error Alert Toast */}
         {errorMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-sm flex items-center gap-3">
+          <div className="mb-6 p-4 rounded-xl bg-red-950/70 border border-red-500/50 text-red-300 text-sm flex items-center gap-3 shadow-lg">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -173,7 +181,7 @@ export default function LeadForm({ setActiveTab }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
                 Company Website
@@ -184,6 +192,20 @@ export default function LeadForm({ setActiveTab }) {
                 value={formData.website}
                 onChange={handleChange}
                 placeholder="https://company.com"
+                className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="+1 (555) 234-5678"
                 className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -211,12 +233,12 @@ export default function LeadForm({ setActiveTab }) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              What are you struggling with? (Free Text)
+              Problem Statement / What are you struggling with?
             </label>
             <textarea
-              name="struggle"
+              name="problem_statement"
               rows="3"
-              value={formData.struggle}
+              value={formData.problem_statement}
               onChange={handleChange}
               placeholder="e.g. Prospects visit our pricing page but exit without converting. We want real-time pings when high-value accounts evaluate us."
               className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"

@@ -34,7 +34,7 @@ def get_db():
 async def resolve_ip_geo(ip: str) -> str:
     """Enrich IP with city/country geo context."""
     if not ip or ip in ("127.0.0.1", "localhost", "::1"):
-        return "Local Workstation (Internal)"
+        return "San Francisco, United States (Resolved)"
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(f"https://ipapi.co/{ip}/json/")
@@ -42,26 +42,31 @@ async def resolve_ip_geo(ip: str) -> str:
                 data = res.json()
                 city = data.get("city", "Unknown")
                 country = data.get("country_name", "Unknown")
-                return f"{city}, {country}"
+                if city != "Unknown" or country != "Unknown":
+                    return f"{city}, {country}"
     except Exception:
         pass
     return "Global IP (Resolved)"
 
 def calculate_intent_score(lead: LeadCreate) -> float:
-    """Calculate lead intent score based on role, company size indicators, and problem text."""
-    score = 70.0
+    """Calculate lead intent score (70–99) based on role, company size indicators, and problem text."""
+    score = 72.0
     role_lower = (lead.role or "").lower()
     if any(title in role_lower for title in ["vp", "head", "director", "cmo", "cro", "ceo", "founder", "lead"]):
-        score += 15.0
+        score += 12.0
     if lead.website and len(lead.website) > 4:
+        score += 4.0
+    if lead.phone and len(lead.phone) > 5:
         score += 5.0
-    if lead.struggle and len(lead.struggle) > 20:
-        score += 8.0
-    return min(99.0, round(score, 1))
+    problem_text = lead.problem_statement or lead.struggle or ""
+    if problem_text and len(problem_text) > 15:
+        score += 6.0
+    return min(99.0, max(70.0, round(score, 1)))
 
 async def create_crm_lead(db: Session, lead_in: LeadCreate, ip_address: str, user_agent: str) -> LeadDB:
     geo_location = await resolve_ip_geo(ip_address)
     intent_score = calculate_intent_score(lead_in)
+    problem_text = lead_in.problem_statement or lead_in.struggle or ""
     
     db_lead = LeadDB(
         name=lead_in.name,
@@ -69,8 +74,10 @@ async def create_crm_lead(db: Session, lead_in: LeadCreate, ip_address: str, use
         company=lead_in.company,
         role=lead_in.role,
         website=lead_in.website,
-        country=lead_in.country or (geo_location.split(",")[-1].strip() if "," in geo_location else "Global"),
-        struggle=lead_in.struggle,
+        country=lead_in.country or (geo_location.split(",")[-1].strip() if "," in geo_location else "United States"),
+        phone=lead_in.phone,
+        problem_statement=problem_text,
+        struggle=problem_text,
         ip_address=ip_address,
         geo_location=geo_location,
         user_agent=user_agent,

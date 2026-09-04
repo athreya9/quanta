@@ -9,7 +9,7 @@ Base = declarative_base()
 class LeadDB(Base):
     """
     SQLAlchemy ORM model for QUANTA CRM Leads.
-    Designed for seamless migration between SQLite (default) and PostgreSQL.
+    Saved directly into quanta_crm.db SQLite database.
     """
     __tablename__ = "leads"
 
@@ -20,14 +20,16 @@ class LeadDB(Base):
     role = Column(String(255), nullable=True)
     website = Column(String(255), nullable=True)
     country = Column(String(100), nullable=True)
+    phone = Column(String(50), nullable=True)
+    problem_statement = Column(Text, nullable=True)
     struggle = Column(Text, nullable=True)
     
-    # Enrichment fields
+    # Enrichment & Scoring fields
     ip_address = Column(String(45), nullable=True)
     geo_location = Column(String(255), nullable=True)
     user_agent = Column(Text, nullable=True)
     intent_score = Column(Float, default=85.0)
-    status = Column(String(50), default="NEW")
+    status = Column(String(50), default="NEW_QUALIFIED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class LeadCreate(BaseModel):
@@ -37,7 +39,9 @@ class LeadCreate(BaseModel):
     role: Optional[str] = Field(None, example="VP of Sales Ops")
     website: Optional[str] = Field(None, example="https://acmegrowth.com")
     country: Optional[str] = Field(None, example="United States")
-    struggle: Optional[str] = Field(None, example="We miss high intent buyers looking for our competitors.")
+    phone: Optional[str] = Field(None, example="+1 (555) 234-5678")
+    problem_statement: Optional[str] = Field(None, example="Missing high-intent buyers visiting competitor pricing tables.")
+    struggle: Optional[str] = Field(None, example="Alternative field for problem statement.")
 
 class LeadResponse(BaseModel):
     id: int
@@ -47,6 +51,8 @@ class LeadResponse(BaseModel):
     role: Optional[str] = None
     website: Optional[str] = None
     country: Optional[str] = None
+    phone: Optional[str] = None
+    problem_statement: Optional[str] = None
     struggle: Optional[str] = None
     ip_address: Optional[str] = None
     geo_location: Optional[str] = None
