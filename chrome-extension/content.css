@@ -1,0 +1,99 @@
+/* QUANTA Chrome Extension Overlay Styles */
+#quanta-intent-overlay-root {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.4;
+  color: #F8FAFC;
+}
+
+.quanta-badge-container {
+  background: rgba(11, 16, 32, 0.92);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.25);
+  backdrop-filter: blur(12px);
+  max-width: 340px;
+  animation: quantaSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.3s ease;
+}
+
+@keyframes quantaSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.quanta-badge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.quanta-badge-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #00F0FF 0%, #FF9900 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.quanta-badge-score {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34D399;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.quanta-badge-body {
+  font-size: 12px;
+  color: #CBD5E1;
+  margin-bottom: 8px;
+}
+
+.quanta-badge-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+}
+
+.quanta-link {
+  color: #00F0FF;
+  text-decoration: none;
+  font-weight: 600;
+}
+.quanta-link:hover {
+  text-decoration: underline;
+}
+
+.quanta-close-btn {
+  background: transparent;
+  border: none;
+  color: #64748B;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+.quanta-close-btn:hover {
+  color: #F8FAFC;
+}

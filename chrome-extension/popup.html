@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background-color: #0B1020;
+      color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      box-sizing: border-box;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .logo-title {
+      font-weight: 800;
+      font-size: 15px;
+      background: linear-gradient(135deg, #00F0FF 0%, #FF9900 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .status-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      color: #34D399;
+    }
+    .signal-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .signal-company {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #F8FAFC;
+    }
+    .signal-desc {
+      font-size: 11px;
+      color: #94A3B8;
+      line-height: 1.4;
+    }
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #00F0FF 0%, #2563EB 100%);
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
+      transition: opacity 0.2s;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-title">QUANTA INTENT ENGINE</div>
+    <div class="status-pill" id="conn-status">CONNECTED</div>
+  </div>
+
+  <div class="signal-card">
+    <div class="signal-company" id="top-company">Loading intent stream...</div>
+    <div class="signal-desc" id="top-desc">Connecting to https://quanta.virtusol.com/api/v1/signals</div>
+  </div>
+
+  <button class="btn" id="trigger-test-btn">⚡ Dispatch Test Slack & Overlay Alert</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

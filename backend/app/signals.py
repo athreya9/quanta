@@ -1,7 +1,11 @@
 import random
+import logging
 from datetime import datetime, timedelta
 from typing import List
 from app.models import SignalItem
+from app.alerts import send_slack_alert
+
+logger = logging.getLogger("quanta.signals")
 
 SAMPLE_SIGNALS = [
     {
@@ -97,3 +101,20 @@ def generate_live_signals() -> List[SignalItem]:
             )
         )
     return signals
+
+async def dispatch_high_intent_alerts(signals: List[SignalItem]):
+    """
+    Scans signals and dispatches Slack notifications for signals with intent_score >= 90.
+    """
+    for sig in signals:
+        if sig.intent_score >= 90:
+            try:
+                await send_slack_alert(
+                    company=sig.company,
+                    event_type=sig.category or sig.event_type,
+                    description=sig.description,
+                    intent_score=sig.intent_score,
+                    source_url=sig.source_url
+                )
+            except Exception as e:
+                logger.error(f"Error triggering alert for signal {sig.id}: {e}")
