@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, ShieldCheck, ArrowRight, Activity, TrendingUp, Bell } from 'lucide-react';
+import { Zap, ShieldCheck, ArrowRight, Activity, TrendingUp, Bell, Download } from 'lucide-react';
 
 export default function HeroSection({ setActiveTab }) {
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -63,6 +63,14 @@ export default function HeroSection({ setActiveTab }) {
             <Activity className="w-5 h-5 text-blue-400" />
             <span>Explore Live Stream</span>
           </button>
+          <a 
+            href="/extension/quanta-extension.zip"
+            download="quanta-extension.zip"
+            className="btn-secondary text-base px-6 py-3.5 w-full sm:w-auto flex items-center justify-center gap-2"
+          >
+            <Download className="w-5 h-5 text-amber-400" />
+            <span>Chrome Extension (Mac ZIP)</span>
+          </a>
         </div>
 
         {/* Ticker Simulation Card */}

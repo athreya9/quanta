@@ -47,6 +47,22 @@ def health_check():
         "timestamp": os.popen("date -u").read().strip()
     }
 
+@app.get("/extension/quanta-extension.zip")
+def download_extension_zip():
+    """Download endpoint for the packaged QUANTA Chrome Extension ZIP."""
+    zip_paths = [
+        os.path.join(os.path.dirname(__file__), "../../frontend/dist/extension/quanta-extension.zip"),
+        os.path.join(os.path.dirname(__file__), "../../frontend/public/extension/quanta-extension.zip")
+    ]
+    for path in zip_paths:
+        if os.path.exists(path):
+            return FileResponse(
+                path,
+                media_type="application/zip",
+                filename="quanta-extension.zip"
+            )
+    raise HTTPException(status_code=404, detail="Extension ZIP artifact not found")
+
 @app.post("/api/v1/leads", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def register_lead(
