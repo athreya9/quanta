@@ -23,16 +23,18 @@ def init_db():
     
     # Auto-migrate missing columns for SQLite quanta_crm.db
     with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE leads ADD COLUMN phone VARCHAR(50)"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE leads ADD COLUMN problem_statement TEXT"))
-            conn.commit()
-        except Exception:
-            pass
+        for col_stmt in [
+            "ALTER TABLE leads ADD COLUMN phone VARCHAR(50)",
+            "ALTER TABLE leads ADD COLUMN problem_statement TEXT",
+            "ALTER TABLE extension_signals ADD COLUMN geo_location VARCHAR(255)",
+            "ALTER TABLE extension_signals ADD COLUMN browser_fingerprint TEXT",
+            "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT"
+        ]:
+            try:
+                conn.execute(text(col_stmt))
+                conn.commit()
+            except Exception:
+                pass
 
 # Auto-initialize DB tables & migrations on startup
 init_db()
@@ -112,7 +114,9 @@ def create_extension_signal(db: Session, payload: ExtensionIngestPayload) -> Ext
         event_type=payload.event_type,
         intent_score=payload.intent_score,
         source=payload.source or "chrome_extension",
-        company=payload.company or f"Domain ({payload.domain})"
+        company=payload.company or f"Domain ({payload.domain})",
+        geo_location=payload.geo_location,
+        browser_fingerprint=payload.browser_fingerprint
     )
     db.add(db_signal)
     db.commit()
