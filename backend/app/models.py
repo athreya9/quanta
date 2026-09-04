@@ -65,11 +65,21 @@ class LeadResponse(BaseModel):
 
 class SignalItem(BaseModel):
     id: str
-    type: str
     company: str
-    signal_text: str
-    timestamp: str
+    event_type: str
+    description: str
+    signal_text: Optional[str] = None
+    source_url: Optional[str] = None
+    detected_at: str
+    timestamp: Optional[str] = None
     intent_score: int
     category: str
-    location: str
-    action_playbook: str
+    location: Optional[str] = None
+    action_playbook: Optional[str] = None
+
+class AlertTestResponse(BaseModel):
+    status: str
+    channel: str
+    company: str
+    intent_score: int
+    message: str

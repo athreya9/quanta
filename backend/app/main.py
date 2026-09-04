@@ -8,7 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.models import LeadCreate, LeadResponse, SignalItem
+from app.models import LeadCreate, LeadResponse, SignalItem, AlertTestResponse
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads
 from app.signals import generate_live_signals
 
@@ -53,7 +53,7 @@ async def register_lead(
 ):
     """
     Ingests an incoming enquiry, enriches IP/geo location,
-    scores intent, and stores the lead directly into QUANTA CRM.
+    scores intent (70–99), and stores the lead directly into quanta_crm.db.
     """
     client_ip = request.headers.get("X-Forwarded-For") or request.client.host
     if "," in client_ip:
@@ -74,14 +74,16 @@ def get_intent_signals():
     """Fetch live micro-signals from the intent firehose."""
     return generate_live_signals()
 
-@app.post("/api/v1/signals/test-alert")
+@app.post("/api/v1/signals/test-alert", response_model=AlertTestResponse)
 def trigger_test_alert(company: str = "Demo Prospect Corp"):
     """Simulate a live Slack & Chrome extension intent ping."""
-    return {
-        "status": "triggered",
-        "channel": "#quanta-intent-alerts",
-        "message": f"🔥 HIGH INTENT SIGNAL: {company} just hit pricing page 4x in 10 mins. Playbook auto-dispatched."
-    }
+    return AlertTestResponse(
+        status="triggered",
+        channel="#quanta-intent-alerts",
+        company=company,
+        intent_score=98,
+        message=f"🔥 HIGH INTENT SIGNAL: {company} hit pricing page 4x in 10 mins. Playbook auto-dispatched."
+    )
 
 # Mount static frontend build if present
 static_dist = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
