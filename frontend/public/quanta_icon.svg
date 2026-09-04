@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="100%" height="100%">
   <defs>
-    <!-- Glowing Cyan Gradient -->
-    <linearGradient id="infinityCyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="50%" stop-color="#00E5FF" />
-      <stop offset="100%" stop-color="#2563EB" />
+    <!-- Vibrant Blue Gradient matching Primary Brand & CTA Buttons -->
+    <linearGradient id="infinityBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2F7BFF" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1A56DB" />
     </linearGradient>
 
-    <!-- Cyan Glow Filter -->
-    <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+    <!-- Neon Blue Glow Filter -->
+    <filter id="blueGlow" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="6" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
@@ -20,9 +20,9 @@
   <!-- Continuous Smooth Infinity Symbol (∞) -->
   <path d="M 100,60 C 125,25 160,25 175,60 C 190,95 160,95 100,60 C 75,25 40,25 25,60 C 10,95 40,95 100,60 Z"
         fill="none"
-        stroke="url(#infinityCyanGrad)"
+        stroke="url(#infinityBlueGrad)"
         stroke-width="18"
         stroke-linecap="round"
         stroke-linejoin="round"
-        filter="url(#cyanGlow)" />
+        filter="url(#blueGlow)" />
 </svg>

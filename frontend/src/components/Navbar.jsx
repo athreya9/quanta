@@ -12,11 +12,11 @@ export default function Navbar({ activeTab, setActiveTab }) {
         <img 
           src="/quanta_icon.svg" 
           alt="QUANTA Infinity Brand Icon" 
-          className="h-9 sm:h-10 w-auto drop-shadow-[0_0_16px_rgba(56,189,248,0.5)] transition-transform group-hover:scale-105" 
+          className="h-9 sm:h-10 w-auto drop-shadow-[0_0_16px_rgba(47,123,255,0.6)] transition-transform group-hover:scale-105" 
         />
         <div className="flex flex-col justify-center text-left">
           <div className="flex items-center gap-1.5 leading-none">
-            <span className="text-lg sm:text-xl font-black tracking-wider text-white group-hover:text-sky-400 transition-colors">
+            <span className="text-lg sm:text-xl font-black tracking-wider text-white group-hover:text-blue-400 transition-colors">
               QUANTA
             </span>
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
