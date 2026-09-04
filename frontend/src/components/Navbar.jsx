@@ -9,11 +9,14 @@ export default function Navbar({ activeTab, setActiveTab }) {
         className="flex items-center gap-3 cursor-pointer select-none group" 
         onClick={() => setActiveTab('landing')}
       >
+        {/* Isolate Logo Swap Only: Clean watermark-free electric blue infinity mark */}
         <img 
-          src="/quanta_icon.svg" 
+          src="/quanta_infinity_mark.png" 
           alt="QUANTA Infinity Brand Icon" 
-          className="h-9 sm:h-10 w-auto drop-shadow-[0_0_16px_rgba(47,123,255,0.6)] transition-transform group-hover:scale-105" 
+          className="h-9 sm:h-10 w-auto drop-shadow-[0_0_16px_rgba(37,99,235,0.6)] transition-transform group-hover:scale-105" 
         />
+        
+        {/* Untouched Brand Title & Subtext */}
         <div className="flex flex-col justify-center text-left">
           <div className="flex items-center gap-1.5 leading-none">
             <span className="text-lg sm:text-xl font-black tracking-wider text-white group-hover:text-blue-400 transition-colors">
