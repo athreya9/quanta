@@ -1,4 +1,4 @@
-// QUANTA Real-Time Domain Matching Engine & Intent Intercept (Content Script)
+// QUANTA Real-Time Domain Matching Engine & Enriched Overlay Intercept (Content Script - Step 5)
 (function () {
   const API_HOST = 'https://quanta.virtusol.com';
   const LOCAL_HOST = 'http://localhost:3002';
@@ -8,7 +8,6 @@
     if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
       return '';
     }
-    // Remove www.
     if (hostname.startsWith('www.')) {
       hostname = hostname.slice(4);
     }
@@ -31,7 +30,7 @@
     return [];
   }
 
-  async function sendExtensionEventToCRM(domain, company, eventType, intentScore) {
+  async function sendExtensionEventToCRM(domain, company, eventType, intentScore, enrichmentData) {
     const payload = {
       domain: domain,
       company: company || domain,
@@ -39,7 +38,9 @@
       url: window.location.href,
       timestamp: new Date().toISOString(),
       intent_score: intentScore || 95,
-      source: "chrome_extension"
+      source: "chrome_extension",
+      browser_fingerprint: navigator.userAgent,
+      geo_location: "Active Extension Telemetry"
     };
 
     try {
@@ -72,19 +73,44 @@
     root.id = 'quanta-intent-overlay-root';
 
     if (matchedSignal) {
-      // High-Intent Domain Match Badge
+      const techStackHtml = matchedSignal.tech_stack_signals 
+        ? `<div class="quanta-enrich-item"><strong>💻 Tech Stack:</strong> ${matchedSignal.tech_stack_signals.join(', ')}</div>`
+        : '';
+      const hiringHtml = matchedSignal.hiring_signals
+        ? `<div class="quanta-enrich-item"><strong>👥 Hiring Signals:</strong> ${matchedSignal.hiring_signals.join(' | ')}</div>`
+        : '';
+      const pricingHtml = matchedSignal.pricing_page_behavior
+        ? `<div class="quanta-enrich-item"><strong>💰 Pricing Behavior:</strong> ${matchedSignal.pricing_page_behavior}</div>`
+        : '';
+      const fundingHtml = matchedSignal.funding_signals
+        ? `<div class="quanta-enrich-item"><strong>📈 Funding:</strong> ${matchedSignal.funding_signals}</div>`
+        : '';
+
+      // High-Intent Domain Match Enriched Badge
       root.innerHTML = `
         <div class="quanta-badge-container quanta-matched">
           <div class="quanta-badge-header">
             <div class="quanta-badge-title">
-              <span className="quanta-pulse"></span>
               <span>⚡ QUANTA INTENT MATCH</span>
             </div>
             <div class="quanta-badge-score">${matchedSignal.intent_score}% MATCH</div>
             <button class="quanta-close-btn" id="quanta-close">&times;</button>
           </div>
           <div class="quanta-badge-body">
-            <strong>${matchedSignal.company}</strong> [${matchedSignal.event_type}]: ${matchedSignal.description}
+            <div style="font-size: 13px; font-weight: 700; color: #FFFFFF; margin-bottom: 4px;">
+              ${matchedSignal.company} <span style="font-size:10px; color:#00F0FF;">(${domain})</span>
+            </div>
+            <div style="font-size: 11px; color: #94A3B8; margin-bottom: 8px;">
+              [${matchedSignal.event_type}]: ${matchedSignal.description}
+            </div>
+
+            <!-- Step 5 Enrichment Metadata Stream -->
+            <div class="quanta-enrichment-box">
+              ${techStackHtml}
+              ${hiringHtml}
+              ${pricingHtml}
+              ${fundingHtml}
+            </div>
           </div>
           <div class="quanta-badge-actions">
             <button class="quanta-btn-action" id="quanta-sync-crm">
@@ -134,7 +160,8 @@
           domain,
           matchedSignal.company,
           matchedSignal.event_type,
-          matchedSignal.intent_score
+          matchedSignal.intent_score,
+          matchedSignal
         );
         if (res) {
           syncBtn.innerText = '✓ Synced to CRM & Slack!';
@@ -154,7 +181,8 @@
           domain,
           `Prospect Domain (${domain})`,
           'MANUAL_DOMAIN_INTERCEPT',
-          91
+          91,
+          null
         );
         if (res) {
           trackBtn.innerText = '✓ Domain Tracking Active!';
@@ -170,7 +198,7 @@
     const domain = getNormalizedDomain();
     if (!domain) return;
 
-    // Check if domain is in ignore list (e.g. google, bing, yahoo)
+    // Ignore list
     const ignoreList = ['google.com', 'bing.com', 'yahoo.com', 'quanta.virtusol.com'];
     if (ignoreList.some(i => domain.includes(i))) {
       return;
@@ -180,7 +208,7 @@
     if (signals && signals.length > 0) {
       injectOverlayBadge(signals[0], domain);
       // Auto-report intercept to CRM
-      sendExtensionEventToCRM(domain, signals[0].company, signals[0].event_type, signals[0].intent_score);
+      sendExtensionEventToCRM(domain, signals[0].company, signals[0].event_type, signals[0].intent_score, signals[0]);
     } else {
       injectOverlayBadge(null, domain);
     }

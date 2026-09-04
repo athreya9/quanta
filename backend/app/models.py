@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Column, Integer, String, Text, DateTime, Float
 from sqlalchemy.orm import declarative_base
@@ -45,6 +45,9 @@ class ExtensionSignalDB(Base):
     intent_score = Column(Integer, default=92)
     source = Column(String(50), default="chrome_extension")
     company = Column(String(255), nullable=True)
+    geo_location = Column(String(255), nullable=True)
+    browser_fingerprint = Column(Text, nullable=True)
+    enrichment_metadata = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class LeadCreate(BaseModel):
@@ -81,6 +84,7 @@ class LeadResponse(BaseModel):
 class SignalItem(BaseModel):
     id: str
     company: str
+    domain: Optional[str] = None
     event_type: str
     description: str
     signal_text: Optional[str] = None
@@ -89,8 +93,15 @@ class SignalItem(BaseModel):
     timestamp: Optional[str] = None
     intent_score: int
     category: str
+    source: Optional[str] = "backend_ingestion"
     location: Optional[str] = None
+    geo_location: Optional[str] = None
     action_playbook: Optional[str] = None
+    # Step 5 Full Enrichment Signals
+    tech_stack_signals: Optional[List[str]] = None
+    hiring_signals: Optional[List[str]] = None
+    pricing_page_behavior: Optional[str] = None
+    funding_signals: Optional[str] = None
 
 class ChromeExtensionEvent(BaseModel):
     domain: str
@@ -98,6 +109,8 @@ class ChromeExtensionEvent(BaseModel):
     event_type: str = "CHROME_EXTENSION_INTERCEPT"
     url: Optional[str] = None
     intent_score: int = 92
+    browser_fingerprint: Optional[str] = None
+    source: Optional[str] = "chrome_extension"
 
 class ExtensionIngestPayload(BaseModel):
     domain: str
@@ -107,6 +120,8 @@ class ExtensionIngestPayload(BaseModel):
     intent_score: int = 92
     source: str = "chrome_extension"
     company: Optional[str] = None
+    geo_location: Optional[str] = None
+    browser_fingerprint: Optional[str] = None
 
 class AlertTestResponse(BaseModel):
     status: str

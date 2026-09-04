@@ -1,19 +1,17 @@
-// QUANTA PWA Service Worker for Push Alerts & Caching
-const CACHE_NAME = 'quanta-v1';
+// QUANTA PWA Service Worker (Network First Strategy)
+const CACHE_NAME = 'quanta-v2';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(['/', '/index.html', '/favicon.svg', '/quanta_logo.svg']);
-    })
-  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.includes('/api/')) return; // Always network-first for API
+  if (e.request.url.includes('/api/') || e.request.url.includes('/extension/')) return;
   e.respondWith(
-    caches.match(e.request).then((response) => {
-      return response || fetch(e.request);
-    })
+    fetch(e.request).catch(() => caches.match(e.request))
   );
 });
