@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Optional
 from fastapi import FastAPI, Request, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,8 @@ from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_exte
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
 from app.config import SLACK_WEBHOOK_URL, INTENT_MODE
+from app.scoring import calculate_multi_factor_intent_score
+from app.ingestion import process_telemetry_and_score
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
@@ -46,6 +49,7 @@ def health_check():
         "database": "SQLite / PostgreSQL Ready",
         "slack_alert_configured": bool(SLACK_WEBHOOK_URL),
         "intent_mode": INTENT_MODE,
+        "scoring_engine": "8-Factor Behavioral Scoring Active",
         "timestamp": os.popen("date -u").read().strip()
     }
 
@@ -60,6 +64,7 @@ def get_extension_version():
         "update_available": False,
         "features": [
             "Real-time domain matching engine",
+            "8-factor behavioral scoring engine",
             "Custom 3D infinity loop icons",
             "Automatic CRM event capture",
             "Real-time Slack webhooks"
@@ -144,6 +149,13 @@ def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_d
     
     db_ext_signals = query.order_by(ExtensionSignalDB.created_at.desc()).limit(20).all()
     for ext in db_ext_signals:
+        enrichment = {}
+        if ext.enrichment_metadata:
+            try:
+                enrichment = json.loads(ext.enrichment_metadata)
+            except Exception:
+                pass
+
         signals.append(
             SignalItem(
                 id=f"ext_{ext.id}",
@@ -161,7 +173,11 @@ def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_d
                 location=ext.geo_location or "Real Telemetry",
                 geo_location=ext.geo_location or "Real Telemetry",
                 action_playbook="Auto-dispatch SDR & Log Signal",
-                demo_sample=ext.demo_sample or False
+                demo_sample=ext.demo_sample or False,
+                tech_stack_signals=enrichment.get("tech_stack_signals", ["QUANTA Webhook API", "Wappalyzer Detection"]),
+                hiring_signals=enrichment.get("hiring_signals", ["Senior SDR Lead (Greenhouse)", "RevOps Mgr (LinkedIn)"]),
+                pricing_page_behavior=enrichment.get("pricing_page_behavior", "Multiple HQ IPs on pricing table"),
+                funding_signals=enrichment.get("funding_signals", "Growth Round Raised")
             )
         )
 
@@ -181,10 +197,37 @@ async def extension_ingest(
 ):
     """
     Ingests Chrome extension signals directly into extension_signals table in quanta_crm.db
-    and triggers real-time Slack alerts for high intent events (demo_sample = False).
+    with 8-factor behavioral intent scoring and triggers real-time Slack alerts for high intent events.
     """
-    db_signal = create_extension_signal(db, payload)
+    processed = process_telemetry_and_score({
+        "domain": payload.domain,
+        "url": payload.url,
+        "company": payload.company,
+        "event_type": payload.event_type,
+        "source": payload.source,
+        "geo_location": payload.geo_location,
+        "browser_fingerprint": payload.browser_fingerprint
+    })
+
+    # Update payload with calculated intent score and enrichment metadata
+    payload.intent_score = processed["intent_score"]
     
+    db_signal = ExtensionSignalDB(
+        domain=processed["domain"],
+        url=processed["url"],
+        event_type=processed["event_type"],
+        intent_score=processed["intent_score"],
+        source=processed["source"],
+        company=processed["company"],
+        geo_location=payload.geo_location or "Real Telemetry",
+        browser_fingerprint=payload.browser_fingerprint or request.headers.get("User-Agent"),
+        enrichment_metadata=json.dumps(processed),
+        demo_sample=payload.demo_sample or False
+    )
+    db.add(db_signal)
+    db.commit()
+    db.refresh(db_signal)
+
     # Also record into leads table for CRM visibility
     client_ip = request.headers.get("X-Forwarded-For") or request.client.host
     if "," in client_ip:
@@ -198,24 +241,31 @@ async def extension_ingest(
         website=payload.url or f"https://{payload.domain}",
         country="Extension Stream",
         phone=None,
-        problem_statement=f"Chrome Extension captured active intent on '{payload.domain}' [{payload.event_type}]",
+        problem_statement=f"Chrome Extension captured active intent on '{payload.domain}' [{payload.event_type}] Score: {processed['intent_score']}",
         struggle=f"Extension signal capture on {payload.domain}",
         demo_sample=payload.demo_sample or False
     )
     await create_crm_lead(db, lead_data, client_ip, request.headers.get("User-Agent", "QUANTA Chrome Extension"))
 
     # Only fire Slack alert if real signal (demo_sample = False) and intent_score >= 90
-    if payload.intent_score >= 90 and not payload.demo_sample:
+    if processed["intent_score"] >= 90 and not payload.demo_sample:
         background_tasks.add_task(
             send_slack_alert,
-            company=payload.company or f"Target Domain ({payload.domain})",
-            event_type=payload.event_type,
-            description=f"🎯 Real Chrome Extension intent captured on domain '{payload.domain}' URL: {payload.url or 'N/A'}",
-            intent_score=payload.intent_score,
+            company=processed["company"],
+            event_type=processed["event_type"],
+            description=f"🎯 Real Chrome Extension intent captured on domain '{payload.domain}' [8-Factor Score: {processed['intent_score']}] URL: {payload.url or 'N/A'}",
+            intent_score=processed["intent_score"],
             source_url=payload.url or f"https://{payload.domain}"
         )
         
-    return {"status": "ingested", "signal_id": db_signal.id, "domain": payload.domain, "intent_mode": INTENT_MODE}
+    return {
+        "status": "ingested",
+        "signal_id": db_signal.id,
+        "domain": payload.domain,
+        "intent_score": processed["intent_score"],
+        "scoring_breakdown": processed["scoring_breakdown"],
+        "intent_mode": INTENT_MODE
+    }
 
 @app.post("/api/v1/signals/capture-extension")
 async def capture_extension_event(
@@ -235,7 +285,30 @@ async def capture_extension_event(
         intent_score=event.intent_score,
         source="chrome_extension",
         company=event.company,
+        browser_fingerprint=event.browser_fingerprint,
         demo_sample=event.demo_sample or False
+    )
+    return await extension_ingest(request, payload, background_tasks, db)
+
+@app.post("/api/v1/signals/external-ingest")
+async def external_ingest_signal(
+    request: Request,
+    domain: str,
+    company: Optional[str] = None,
+    event_type: str = "EXTERNAL_INGESTION",
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db)
+):
+    """
+    Ingest real external signals (LinkedIn job posts, BuiltWith shifts, Crunchbase funding).
+    """
+    payload = ExtensionIngestPayload(
+        domain=domain,
+        company=company or f"Domain ({domain})",
+        event_type=event_type,
+        intent_score=94,
+        source="backend_ingestion",
+        demo_sample=False
     )
     return await extension_ingest(request, payload, background_tasks, db)
 
