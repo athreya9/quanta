@@ -1,4 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* QUANTA B2B Revenue-Focused Design System */
+
 :root {
   --bg-dark: #0B1020;
   --bg-dark-card: #131B2E;
