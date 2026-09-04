@@ -1,45 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 240" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 160" width="100%" height="100%">
   <defs>
-    <!-- Vibrant Glowing Gradients -->
-    <linearGradient id="infinityGradBlue" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2F7BFF" />
-      <stop offset="50%" stop-color="#38BDF8" />
-      <stop offset="100%" stop-color="#00E5FF" />
+    <linearGradient id="infinityCyanGradLogo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#00E5FF" />
+      <stop offset="100%" stop-color="#2563EB" />
     </linearGradient>
-    <linearGradient id="infinityGradGold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F5B544" />
-      <stop offset="50%" stop-color="#FFD166" />
-      <stop offset="100%" stop-color="#FF9F1C" />
-    </linearGradient>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <filter id="cyanGlowLogo" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
     </filter>
   </defs>
 
-  <!-- Infinity Symbol Motif -->
-  <g transform="translate(40, 20)">
-    <!-- Left Loop (Blue/Cyan Accent) -->
-    <path d="M 120,100 C 170,100 210,140 250,140 C 290,140 330,100 380,100 C 430,100 470,140 470,190 C 470,240 430,280 380,280 C 330,280 290,240 250,240 C 210,240 170,280 120,280 C 70,280 30,240 30,190 C 30,140 70,100 120,100 Z" 
-          fill="none" 
-          stroke="url(#infinityGradBlue)" 
-          stroke-width="28" 
-          stroke-linecap="round" 
+  <g transform="translate(10, 20)">
+    <path d="M 90,60 C 115,25 150,25 165,60 C 180,95 150,95 90,60 C 65,25 30,25 15,60 C 0,95 30,95 90,60 Z"
+          fill="none"
+          stroke="url(#infinityCyanGradLogo)"
+          stroke-width="18"
+          stroke-linecap="round"
           stroke-linejoin="round"
-          transform="scale(0.5) translate(40, 20)"
-          filter="url(#glow)"/>
-    
-    <!-- Right Loop Overlay (Gold Accent) -->
-    <path d="M 250,140 C 290,140 330,100 380,100 C 430,100 470,140 470,190 C 470,240 430,280 380,280 C 330,280 290,240 250,240" 
-          fill="none" 
-          stroke="url(#infinityGradGold)" 
-          stroke-width="28" 
-          stroke-linecap="round" 
-          stroke-linejoin="round"
-          transform="scale(0.5) translate(40, 20)"/>
+          filter="url(#cyanGlowLogo)" />
   </g>
 
-  <!-- Brand Typography (Bright White & Cyan) -->
-  <text x="310" y="132" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="900" font-size="84" fill="#FFFFFF" letter-spacing="6">QUANTA</text>
-  <text x="314" y="180" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="700" font-size="26" fill="#38BDF8" letter-spacing="4">REAL-TIME INTENT ENGINE</text>
+  <text x="210" y="85" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="900" font-size="64" fill="#FFFFFF" letter-spacing="4">QUANTA</text>
+  <text x="212" y="118" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="18" fill="#94A3B8" letter-spacing="3">REAL-TIME INTENT ENGINE</text>
 </svg>
