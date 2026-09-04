@@ -9,12 +9,39 @@ export default function Navbar({ activeTab, setActiveTab }) {
         className="flex items-center gap-3 cursor-pointer select-none group" 
         onClick={() => setActiveTab('landing')}
       >
-        {/* Isolated Logo Swap: Clean 3D Blue-to-Gold Infinity Loop Mark */}
-        <img 
-          src="/quanta_infinity_3d_blue_gold.png" 
-          alt="QUANTA 3D Infinity Brand Icon" 
-          className="h-9 sm:h-10 w-auto drop-shadow-[0_0_16px_rgba(47,123,255,0.5)] transition-transform group-hover:scale-105" 
-        />
+        {/* Native Vector SVG Infinity Symbol (Zero raster background box, transparent) */}
+        <svg 
+          viewBox="0 0 160 80" 
+          className="h-8 w-auto shrink-0 transition-transform group-hover:scale-105"
+          style={{ background: 'transparent', mixBlendMode: 'normal' }}
+          aria-label="QUANTA Infinity Symbol"
+        >
+          <defs>
+            {/* Linear Gradient: Electric Blue/Cyan (#2563EB/#00F0FF) to Golden-Orange (#FF9900/#FFC700) */}
+            <linearGradient id="quantaInfinityGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#2563EB" />
+              <stop offset="35%" stopColor="#00F0FF" />
+              <stop offset="70%" stopColor="#FF9900" />
+              <stop offset="100%" stopColor="#FFC700" />
+            </linearGradient>
+            <filter id="svgGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <path 
+            d="M 80,40 C 100,16 128,16 140,40 C 152,64 128,64 80,40 C 52,16 28,16 20,40 C 8,64 32,64 80,40 Z"
+            fill="none"
+            stroke="url(#quantaInfinityGrad)"
+            strokeWidth="13"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#svgGlow)"
+          />
+        </svg>
         
         {/* Preserved Brand Title & Subtext */}
         <div className="flex flex-col justify-center text-left">
