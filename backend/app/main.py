@@ -47,7 +47,7 @@ def health_check():
         "timestamp": os.popen("date -u").read().strip()
     }
 
-@app.get("/extension/quanta-extension.zip")
+@app.api_route("/extension/quanta-extension.zip", methods=["GET", "HEAD"])
 def download_extension_zip():
     """Download endpoint for the packaged QUANTA Chrome Extension ZIP."""
     zip_paths = [
