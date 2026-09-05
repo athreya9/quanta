@@ -33,6 +33,17 @@ class LeadDB(Base):
     demo_sample = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    # STEP 8: Automatic Lead Enrichment Engine (ALEP) Enriched Columns
+    enriched_email = Column(String(255), nullable=True)
+    enriched_phone = Column(String(50), nullable=True)
+    enriched_role = Column(String(255), nullable=True)
+    enriched_linkedin = Column(String(255), nullable=True)
+    enriched_company_size = Column(String(100), nullable=True)
+    enriched_tech_stack = Column(Text, nullable=True)
+    enriched_hiring_signals = Column(Text, nullable=True)
+    enriched_funding_signals = Column(Text, nullable=True)
+    enrichment_status = Column(String(50), default="PENDING")
+
 class ExtensionSignalDB(Base):
     """
     SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
