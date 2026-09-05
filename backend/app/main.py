@@ -20,6 +20,7 @@ from app.scoring import calculate_multi_factor_intent_score
 from app.ingestion import process_telemetry_and_score
 from app.deduplication import is_duplicate_signal
 from app.lead_enrichment_worker import start_periodic_enrichment_loop, run_enrichment_worker_cycle
+from app.intent_crawler_worker import start_periodic_qeic_crawler_loop, run_qeic_crawler_cycle
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
@@ -45,6 +46,9 @@ async def startup_event():
     # Trigger initial ALEP cycle and start 5-minute background cron worker
     asyncio.create_task(run_enrichment_worker_cycle())
     asyncio.create_task(start_periodic_enrichment_loop(interval_seconds=300))
+    # Trigger initial QEIC crawler cycle and start 10-minute 24/7 autonomous intent crawler
+    asyncio.create_task(run_qeic_crawler_cycle())
+    asyncio.create_task(start_periodic_qeic_crawler_loop(interval_seconds=600))
 
 @app.get("/api/v1/health")
 def health_check():
@@ -58,6 +62,7 @@ def health_check():
         "deduplication_engine": "30-Minute Signal Window Active",
         "scoring_engine": "8-Factor Behavioral Scoring Active",
         "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running)",
+        "autonomous_intent_crawler": "Active (QEIC 24/7 Multi-Source Engine Running)",
         "timestamp": os.popen("date -u").read().strip()
     }
 
@@ -163,6 +168,26 @@ async def trigger_alep_enrichment(db: Session = Depends(get_db)):
     from app.enrichment import run_batch_lead_enrichment
     res = await run_batch_lead_enrichment(db, limit=50)
     return res
+
+@app.post("/api/v1/crawler/run")
+async def run_qeic_crawler_pass(db: Session = Depends(get_db)):
+    """
+    Manually trigger QEIC (QUANTA External Intent Crawler) pass to ingest multi-source signals
+    and generate Outreach-Ready Leads.
+    """
+    from app.crawler import execute_qeic_crawl_and_lead_build
+    res = await execute_qeic_crawl_and_lead_build(db)
+    return res
+
+@app.get("/api/v1/leads/outreach-ready", response_model=list[LeadResponse])
+def list_outreach_ready_leads(db: Session = Depends(get_db), limit: int = 50):
+    """
+    Fetch verified Outreach-Ready Leads with generated outreach scripts, playbooks, and buyer persona tags.
+    """
+    leads = db.query(LeadDB).filter(LeadDB.outreach_ready == True).order_by(LeadDB.created_at.desc()).limit(limit).all()
+    if INTENT_MODE == "production":
+        return [l for l in leads if not getattr(l, 'demo_sample', False)]
+    return leads
 
 @app.get("/api/v1/signals", response_model=list[SignalItem])
 def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_db)):

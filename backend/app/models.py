@@ -44,6 +44,12 @@ class LeadDB(Base):
     enriched_funding_signals = Column(Text, nullable=True)
     enrichment_status = Column(String(50), default="PENDING")
 
+    # STEP 9: Outreach-Ready Lead Builder & QEIC Crawler Fields
+    outreach_ready = Column(Boolean, default=False)
+    outreach_playbook = Column(Text, nullable=True)
+    buyer_persona = Column(String(100), nullable=True)
+    signal_source = Column(String(100), default="qeic_crawler")
+
 class ExtensionSignalDB(Base):
     """
     SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
@@ -103,6 +109,12 @@ class LeadResponse(BaseModel):
     enriched_hiring_signals: Optional[str] = None
     enriched_funding_signals: Optional[str] = None
     enrichment_status: Optional[str] = "PENDING"
+
+    # STEP 9 Outreach-Ready Fields
+    outreach_ready: Optional[bool] = False
+    outreach_playbook: Optional[str] = None
+    buyer_persona: Optional[str] = None
+    signal_source: Optional[str] = "qeic_crawler"
 
     class Config:
         from_attributes = True
