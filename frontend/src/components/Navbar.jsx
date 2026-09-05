@@ -1,7 +1,26 @@
-import React from 'react';
-import { Activity, Shield, ArrowRight, LayoutDashboard, Radio } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, Shield, ArrowRight, LayoutDashboard, Radio, Bell } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await fetch('/api/v1/crm/unread-count');
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadCount(data.unread_count || 0);
+        }
+      } catch (e) {
+        // silent catch
+      }
+    };
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <header className="glass-nav fixed top-0 left-0 right-0 z-50 px-4 lg:px-8 py-3.5 flex items-center justify-between border-b border-slate-800/80">
       {/* Top-Left Branding Header */}
@@ -9,7 +28,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
         className="flex items-center gap-3 cursor-pointer select-none group" 
         onClick={() => setActiveTab('landing')}
       >
-        {/* Native Vector SVG Infinity Symbol (Zero raster background box, transparent) */}
+        {/* Native Vector SVG Infinity Symbol */}
         <svg 
           viewBox="0 0 160 80" 
           className="h-8 w-auto shrink-0 transition-transform group-hover:scale-105"
@@ -17,7 +36,6 @@ export default function Navbar({ activeTab, setActiveTab }) {
           aria-label="QUANTA Infinity Symbol"
         >
           <defs>
-            {/* Linear Gradient: Electric Blue/Cyan (#2563EB/#00F0FF) to Golden-Orange (#FF9900/#FFC700) */}
             <linearGradient id="quantaInfinityGrad" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#2563EB" />
               <stop offset="35%" stopColor="#00F0FF" />
@@ -57,7 +75,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
         </div>
       </div>
 
-      {/* Desktop Navigation Links (Vertically Centered) */}
+      {/* Desktop Navigation Links */}
       <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
         <button 
           onClick={() => setActiveTab('landing')} 
@@ -74,17 +92,22 @@ export default function Navbar({ activeTab, setActiveTab }) {
         </button>
         <button 
           onClick={() => setActiveTab('crm')} 
-          className={`hover:text-white flex items-center gap-1.5 transition py-1 ${activeTab === 'crm' ? 'text-blue-400 font-semibold' : ''}`}
+          className={`hover:text-white flex items-center gap-1.5 transition py-1 relative ${activeTab === 'crm' ? 'text-blue-400 font-semibold' : ''}`}
         >
           <LayoutDashboard className="w-4 h-4 text-amber-400" />
-          QUANTA CRM
+          <span>QUANTA CRM</span>
+          {unreadCount > 0 && (
+            <span className="px-1.5 py-0.2 text-[10px] font-black bg-rose-600 text-white rounded-full border border-rose-400 animate-pulse shadow-lg shadow-rose-900/50">
+              {unreadCount}
+            </span>
+          )}
         </button>
         <a href="#faq" onClick={() => setActiveTab('landing')} className="hover:text-white transition py-1">
           B2B FAQs
         </a>
       </nav>
 
-      {/* CTA Button (Vertically Centered) */}
+      {/* CTA Button */}
       <div className="flex items-center gap-3">
         <button 
           onClick={() => {

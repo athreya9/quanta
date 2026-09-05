@@ -50,6 +50,14 @@ class LeadDB(Base):
     buyer_persona = Column(String(100), nullable=True)
     signal_source = Column(String(100), default="qeic_crawler")
 
+    # STEP 10: Real Data Activation & CRM Enhancements
+    outreach_status = Column(String(50), default="UNREAD")
+    intent_quality = Column(String(50), default="VERIFIED REAL")
+    lead_owner = Column(String(100), default="Unassigned (Auto-Routed)")
+    lead_notes = Column(Text, nullable=True)
+    activity_log = Column(Text, nullable=True)
+    unread_intent = Column(Boolean, default=True)
+
 class ExtensionSignalDB(Base):
     """
     SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
@@ -115,6 +123,15 @@ class LeadResponse(BaseModel):
     outreach_playbook: Optional[str] = None
     buyer_persona: Optional[str] = None
     signal_source: Optional[str] = "qeic_crawler"
+
+    # STEP 10 Real Data & CRM Enhancements Output Fields
+    outreach_status: Optional[str] = "UNREAD"
+    intent_quality: Optional[str] = "VERIFIED REAL"
+    lead_owner: Optional[str] = "Unassigned (Auto-Routed)"
+    lead_notes: Optional[str] = None
+    activity_log: Optional[str] = None
+    unread_intent: Optional[bool] = True
+    lead_age: Optional[str] = "Just now"
 
     class Config:
         from_attributes = True

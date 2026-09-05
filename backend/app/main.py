@@ -148,16 +148,75 @@ async def register_lead(
         
     return db_lead
 
+import datetime
+
+def compute_relative_lead_age(created_at: datetime.datetime) -> str:
+    """Calculates human-readable relative age (e.g., '10m', '2h', '1d', '3d')."""
+    if not created_at:
+        return "Just now"
+    diff = datetime.datetime.utcnow() - created_at
+    secs = int(diff.total_seconds())
+    if secs < 60:
+        return "Just now"
+    elif secs < 3600:
+        return f"{secs // 60}m"
+    elif secs < 86400:
+        return f"{secs // 3600}h"
+    else:
+        days = secs // 86400
+        return f"{days}d"
+
 @app.get("/api/v1/leads", response_model=list[LeadResponse])
 def list_leads(db: Session = Depends(get_db), limit: int = 50):
     """
-    Fetch stored leads from QUANTA CRM.
+    Fetch stored leads from QUANTA CRM with relative lead_age.
     Filters out demo_sample leads if INTENT_MODE == 'production'.
     """
     all_leads = get_all_leads(db, limit=limit)
-    if INTENT_MODE == "production":
-        return [l for l in all_leads if not getattr(l, 'demo_sample', False)]
-    return all_leads
+    filtered = all_leads if INTENT_MODE != "production" else [l for l in all_leads if not getattr(l, 'demo_sample', False)]
+    
+    for lead in filtered:
+        lead.lead_age = compute_relative_lead_age(lead.created_at)
+        
+    return filtered
+
+@app.get("/api/v1/crm/unread-count")
+def get_unread_intent_count(db: Session = Depends(get_db)):
+    """Returns total count of unread intent records for UI notification badges."""
+    count = db.query(LeadDB).filter(
+        (LeadDB.unread_intent == True) | (LeadDB.outreach_status == "UNREAD")
+    ).count()
+    return {"unread_count": count}
+
+@app.post("/api/v1/leads/{lead_id}/mark-read")
+def mark_lead_read(lead_id: int, db: Session = Depends(get_db)):
+    """Marks a lead intent record as read."""
+    lead = db.query(LeadDB).filter(LeadDB.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead record not found")
+    lead.unread_intent = False
+    if lead.outreach_status == "UNREAD":
+        lead.outreach_status = "IN_PROGRESS"
+    db.commit()
+    return {"status": "success", "lead_id": lead_id, "outreach_status": lead.outreach_status}
+
+@app.patch("/api/v1/leads/{lead_id}/status")
+def update_lead_outreach_status(lead_id: int, new_status: str, db: Session = Depends(get_db)):
+    """Updates outreach status (UNREAD, IN_PROGRESS, REACHED_OUT, CLOSED)."""
+    valid_statuses = ["UNREAD", "IN_PROGRESS", "REACHED_OUT", "CLOSED"]
+    status_upper = new_status.upper()
+    if status_upper not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {valid_statuses}")
+    
+    lead = db.query(LeadDB).filter(LeadDB.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead record not found")
+    
+    lead.outreach_status = status_upper
+    if status_upper != "UNREAD":
+        lead.unread_intent = False
+    db.commit()
+    return {"status": "updated", "lead_id": lead_id, "outreach_status": status_upper}
 
 @app.post("/api/v1/crm/enrich")
 async def trigger_alep_enrichment(db: Session = Depends(get_db)):
@@ -185,9 +244,10 @@ def list_outreach_ready_leads(db: Session = Depends(get_db), limit: int = 50):
     Fetch verified Outreach-Ready Leads with generated outreach scripts, playbooks, and buyer persona tags.
     """
     leads = db.query(LeadDB).filter(LeadDB.outreach_ready == True).order_by(LeadDB.created_at.desc()).limit(limit).all()
-    if INTENT_MODE == "production":
-        return [l for l in leads if not getattr(l, 'demo_sample', False)]
-    return leads
+    filtered = leads if INTENT_MODE != "production" else [l for l in leads if not getattr(l, 'demo_sample', False)]
+    for lead in filtered:
+        lead.lead_age = compute_relative_lead_age(lead.created_at)
+    return filtered
 
 @app.get("/api/v1/signals", response_model=list[SignalItem])
 def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_db)):

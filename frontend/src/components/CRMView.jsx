@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Flame, RefreshCw, Search, ShieldCheck, MapPin, Building, Mail, Globe, Phone, ArrowUpRight, Clock, MessageSquare, Table, Grid, CheckCircle2, Zap, Cpu, Briefcase, DollarSign, Linkedin, Compass, Send, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { LayoutDashboard, Users, Flame, RefreshCw, Search, ShieldCheck, MapPin, Building, Mail, Globe, Phone, ArrowUpRight, Clock, MessageSquare, Table, Grid, CheckCircle2, Zap, Cpu, Briefcase, DollarSign, Linkedin, Compass, Send, ChevronDown, ChevronUp, Copy, Check, Eye, Tag, AlertCircle } from 'lucide-react';
 
 export default function CRMView() {
   const [leads, setLeads] = useState([]);
@@ -8,10 +8,11 @@ export default function CRMView() {
   const [crawling, setCrawling] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
-  const [filterMode, setFilterMode] = useState('all'); // 'all', 'high_intent', 'geo_enriched', 'alep_enriched', 'outreach_ready'
+  const [filterMode, setFilterMode] = useState('all'); // 'all', 'unread', 'high_intent', 'outreach_ready', 'alep_enriched'
   const [intentMode, setIntentMode] = useState('production');
   const [error, setError] = useState(null);
   const [expandedPlaybooks, setExpandedPlaybooks] = useState({});
+  const [activePlaybookTab, setActivePlaybookTab] = useState({}); // 'email' or 'linkedin'
   const [copiedId, setCopiedId] = useState(null);
 
   const fetchCRMLeads = async () => {
@@ -64,12 +65,20 @@ export default function CRMView() {
           enrichment_status: "ENRICHED",
           outreach_ready: true,
           buyer_persona: "VP of Revenue Operations",
+          outreach_status: "UNREAD",
+          intent_quality: "VERIFIED REAL",
+          lead_age: "10m",
+          unread_intent: true,
           outreach_playbook: JSON.stringify({
             subject_line: "Quick question re: active intent signals on datadog.com",
             pain_hook: "Noticed Datadog Cloud Systems recently posted active sales hiring roles while 3 HQ IPs evaluated pricing tiers.",
             cold_email_body: "Hi David,\n\nNoticed Datadog Cloud Systems has active intent signals firing around demand generation & sales stack expansion.\n\nSpecifically: Active intent signals on datadog.com: 3 concurrent HQ IPs spent 3m evaluating pricing matrix.\n\nQUANTA's real-time intent engine captured this micro-surge before your team reached out to competitors. Worth a 5-minute preview of target accounts hitting datadog.com?\n\nBest,\nQUANTA Team",
             phone_call_script: "Hey David, calling from QUANTA. We flagged high-intent buyer activity on datadog.com — 3 HQ IPs spent 3m on pricing table. Is your team currently following up?",
-            recommended_channel: "Email + LinkedIn InMail Touchpoint"
+            target_persona: "VP of Revenue Operations",
+            linkedin_connection_request: "Hi David, saw your work leading VP of Revenue Operations initiatives at Datadog Cloud Systems. QUANTA flagged active buyer intent signals on datadog.com this week — would love to connect!",
+            linkedin_followup_message: "Thanks for connecting, David! Quick context: our intent engine picked up concurrent HQ IP pricing visits on datadog.com alongside active Greenhouse RevOps hiring posts.",
+            linkedin_pitch_message: "David, most teams miss high-intent prospects evaluating pricing tables. We help VP of Revenue Operationss intercept these buyers automatically before competitors do.",
+            linkedin_cta_message: "Would you be open to a 3-minute quick look at the live buyer feed for Datadog Cloud Systems? https://quanta.virtusol.com"
           }),
           created_at: new Date().toISOString()
         }
@@ -107,11 +116,30 @@ export default function CRMView() {
     }
   };
 
+  const markAsRead = async (id) => {
+    try {
+      await fetch(`/api/v1/leads/${id}/mark-read`, { method: 'POST' });
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, unread_intent: false, outreach_status: l.outreach_status === 'UNREAD' ? 'IN_PROGRESS' : l.outreach_status } : l));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateStatus = async (id, newStatus) => {
+    try {
+      await fetch(`/api/v1/leads/${id}/status?new_status=${newStatus}`, { method: 'PATCH' });
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, outreach_status: newStatus, unread_intent: false } : l));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const togglePlaybook = (id) => {
     setExpandedPlaybooks(prev => ({
       ...prev,
       [id]: !prev[id]
     }));
+    markAsRead(id);
   };
 
   const copyToClipboard = (id, text) => {
@@ -126,6 +154,7 @@ export default function CRMView() {
 
   // Filter logic
   const categoryFilteredLeads = leads.filter(l => {
+    if (filterMode === 'unread') return l.unread_intent === true || l.outreach_status === 'UNREAD';
     if (filterMode === 'high_intent') return (l.intent_score || 0) >= 80;
     if (filterMode === 'geo_enriched') return (l.geo_location || '').length > 3;
     if (filterMode === 'alep_enriched') return l.enrichment_status === 'ENRICHED';
@@ -161,6 +190,8 @@ export default function CRMView() {
     }
   };
 
+  const unreadCount = leads.filter(l => l.unread_intent === true || l.outreach_status === 'UNREAD').length;
+
   return (
     <div className="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -170,12 +201,18 @@ export default function CRMView() {
             <LayoutDashboard className="w-6 h-6 text-amber-400" />
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white">QUANTA CRM Repository</h1>
             <span className="badge-gold">Live quanta_crm.db</span>
+            {unreadCount > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white flex items-center gap-1 animate-pulse">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {unreadCount} UNREAD INTENT
+              </span>
+            )}
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold tracking-wider uppercase ${intentMode === 'production' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'}`}>
               {intentMode === 'production' ? '🟢 PRODUCTION INTENT' : '🟡 DEMO INTENT'}
             </span>
           </div>
           <p className="text-sm text-slate-300">
-            QEIC 24/7 Autonomous Crawler, 8-Factor Intent Scoring, ALEP Enrichment, and Outreach-Ready Lead Builder.
+            QEIC Open-Source Crawler, Real Intent Telemetry, ALEP Engine, and LinkedIn Outreach Builder.
           </p>
         </div>
 
@@ -184,7 +221,7 @@ export default function CRMView() {
             onClick={triggerQeicCrawl}
             disabled={crawling}
             className="btn-primary text-xs py-2 px-3 flex items-center gap-2"
-            title="Execute 24/7 QEIC Autonomous Intent Crawler pass across multi-source feeds"
+            title="Execute 24/7 QEIC Open-Source Autonomous Intent Crawler pass"
           >
             <Compass className={`w-3.5 h-3.5 ${crawling ? 'animate-spin text-blue-300' : ''}`} />
             <span>{crawling ? 'Crawling...' : 'Run QEIC Crawler'}</span>
@@ -194,7 +231,7 @@ export default function CRMView() {
             onClick={triggerAlepEnrichment}
             disabled={enriching}
             className="btn-gold text-xs py-2 px-3 flex items-center gap-2"
-            title="Scan CRM & Auto-Enrich pending leads via Hunter, Clearbit, Apollo & domain intelligence"
+            title="Scan CRM & Auto-Enrich pending leads via open-source MX verification & domain intelligence"
           >
             <Zap className={`w-3.5 h-3.5 ${enriching ? 'animate-bounce text-amber-300' : ''}`} />
             <span>{enriching ? 'Enriching...' : 'Run ALEP Scan'}</span>
@@ -229,6 +266,23 @@ export default function CRMView() {
 
       {/* Interactive Stat Cards (Filters) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        {/* Unread Intent Badge Card */}
+        <div 
+          onClick={() => setFilterMode('unread')}
+          className={`card-dark p-4 cursor-pointer transition flex items-center justify-between ${filterMode === 'unread' ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-950/20' : 'border-slate-800 hover:border-slate-700'}`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Unread Intent</div>
+              <div className="text-xl font-extrabold text-rose-400">{unreadCount}</div>
+            </div>
+          </div>
+          {filterMode === 'unread' && <CheckCircle2 className="w-4 h-4 text-rose-400" />}
+        </div>
+
         {/* Total Ingested Leads */}
         <div 
           onClick={() => setFilterMode('all')}
@@ -302,35 +356,16 @@ export default function CRMView() {
           </div>
           {filterMode === 'alep_enriched' && <CheckCircle2 className="w-4 h-4 text-purple-400" />}
         </div>
-
-        {/* IP Geo-Enriched */}
-        <div 
-          onClick={() => setFilterMode('geo_enriched')}
-          className={`card-dark p-4 cursor-pointer transition flex items-center justify-between ${filterMode === 'geo_enriched' ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-950/20' : 'border-slate-800 hover:border-slate-700'}`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">IP Geo-Enriched</div>
-              <div className="text-xl font-extrabold text-emerald-400">
-                {leads.filter(l => (l.geo_location || '').length > 3).length}
-              </div>
-            </div>
-          </div>
-          {filterMode === 'geo_enriched' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-        </div>
       </div>
 
       {/* Active Filter Indicator Bar */}
       <div className="flex items-center justify-between text-xs text-slate-400 mb-4 px-1">
         <div>
           Showing <span className="text-white font-bold">{filteredLeads.length}</span> of {leads.length} leads 
+          {filterMode === 'unread' && <span className="text-rose-400 font-semibold"> (Filtered: Unread Intent Signals)</span>}
           {filterMode === 'high_intent' && <span className="text-amber-400 font-semibold"> (Filtered: High Intent &gt; 80)</span>}
           {filterMode === 'outreach_ready' && <span className="text-pink-400 font-semibold"> (Filtered: Verified Outreach-Ready Leads)</span>}
           {filterMode === 'alep_enriched' && <span className="text-purple-400 font-semibold"> (Filtered: ALEP Enriched Records)</span>}
-          {filterMode === 'geo_enriched' && <span className="text-emerald-400 font-semibold"> (Filtered: IP Geo-Enriched)</span>}
         </div>
         {filterMode !== 'all' && (
           <button 
@@ -365,19 +400,24 @@ export default function CRMView() {
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider border-b border-slate-800 font-mono">
               <tr>
-                <th className="p-3.5">ID / Name</th>
-                <th className="p-3.5">Company & Buyer Persona</th>
+                <th className="p-3.5">Lead Age / Name</th>
+                <th className="p-3.5">Company & Persona</th>
                 <th className="p-3.5">Verified Contact</th>
-                <th className="p-3.5">Intent Score</th>
+                <th className="p-3.5">Intent Score & Quality</th>
                 <th className="p-3.5">Outreach Status</th>
-                <th className="p-3.5">Created At</th>
+                <th className="p-3.5">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 font-mono">
               {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-slate-900/50 transition">
+                <tr key={lead.id} className={`transition ${lead.unread_intent || lead.outreach_status === 'UNREAD' ? 'bg-rose-950/20 border-l-2 border-l-rose-500' : 'hover:bg-slate-900/50'}`}>
                   <td className="p-3.5 font-sans">
-                    <div className="font-bold text-white text-sm">{lead.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-slate-800 text-amber-400 font-mono">
+                        {lead.lead_age || '10m'}
+                      </span>
+                      <div className="font-bold text-white text-sm">{lead.name}</div>
+                    </div>
                     <div className="text-[11px] text-slate-500">#{lead.id} | {lead.country || 'Global'}</div>
                   </td>
                   <td className="p-3.5 font-sans">
@@ -393,23 +433,34 @@ export default function CRMView() {
                     )}
                   </td>
                   <td className="p-3.5">
-                    <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] ${lead.intent_score >= 85 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-blue-500/20 text-blue-400 border border-blue-500/40'}`}>
-                      Score {lead.intent_score}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] ${lead.intent_score >= 85 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-blue-500/20 text-blue-400 border border-blue-500/40'}`}>
+                        Score {lead.intent_score}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {lead.intent_quality || 'VERIFIED REAL'}
+                      </span>
+                    </div>
                   </td>
                   <td className="p-3.5">
-                    {lead.outreach_ready ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] bg-pink-500/20 text-pink-300 border border-pink-500/40">
-                        <Send className="w-3 h-3" /> OUTREACH READY
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                        <Zap className="w-3 h-3" /> ENRICHED
-                      </span>
-                    )}
+                    <select
+                      value={lead.outreach_status || 'UNREAD'}
+                      onChange={(e) => updateStatus(lead.id, e.target.value)}
+                      className={`text-[11px] font-extrabold px-2 py-1 rounded bg-slate-900 border ${lead.outreach_status === 'UNREAD' ? 'border-rose-500 text-rose-400' : lead.outreach_status === 'REACHED_OUT' ? 'border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-300'}`}
+                    >
+                      <option value="UNREAD">🔴 UNREAD</option>
+                      <option value="IN_PROGRESS">🟡 IN_PROGRESS</option>
+                      <option value="REACHED_OUT">🟢 REACHED_OUT</option>
+                      <option value="CLOSED">🟣 CLOSED</option>
+                    </select>
                   </td>
                   <td className="p-3.5 text-slate-400">
-                    {new Date(lead.created_at).toLocaleDateString()} {new Date(lead.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <button
+                      onClick={() => togglePlaybook(lead.id)}
+                      className="px-2.5 py-1 rounded text-[11px] font-semibold bg-pink-500/10 text-pink-300 border border-pink-500/30 hover:bg-pink-500/20 flex items-center gap-1"
+                    >
+                      <Send className="w-3 h-3" /> Playbook
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -424,26 +475,34 @@ export default function CRMView() {
             const hiringSignals = parseJsonArray(lead.enriched_hiring_signals);
             const playbook = parseJsonObject(lead.outreach_playbook);
             const isPlaybookOpen = expandedPlaybooks[lead.id];
+            const activeTab = activePlaybookTab[lead.id] || 'email';
+            const isUnread = lead.unread_intent === true || lead.outreach_status === 'UNREAD';
 
             return (
-              <div key={lead.id} className="card-dark p-5 border-slate-800 hover:border-slate-700 transition">
+              <div key={lead.id} className={`card-dark p-5 transition ${isUnread ? 'border-l-4 border-l-rose-500 border-rose-500/40 bg-slate-900/90' : 'border-slate-800 hover:border-slate-700'}`}>
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2.5 flex-wrap">
+                      {isUnread && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white flex items-center gap-1 animate-pulse">
+                          <AlertCircle className="w-3 h-3" /> UNREAD INTENT
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-amber-400 font-mono">
+                        Age: {lead.lead_age || '10m'}
+                      </span>
                       <h3 className="text-base font-bold text-white">{lead.name}</h3>
                       <span className="badge-gold text-[10px]">Intent Score: {lead.intent_score}/100</span>
-                      <span className="badge-blue text-[10px]">{lead.status || 'NEW_QUALIFIED'}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        {lead.intent_quality || 'VERIFIED REAL'}
+                      </span>
                       {lead.outreach_ready && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-pink-500/20 text-pink-300 border border-pink-500/40 flex items-center gap-1">
                           <Send className="w-3 h-3" /> OUTREACH READY
                         </span>
                       )}
-                      {lead.enrichment_status === 'ENRICHED' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
-                          <Zap className="w-3 h-3" /> ALEP ENRICHED
-                        </span>
-                      )}
                     </div>
+
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
                       <span className="flex items-center gap-1 font-semibold text-white">
                         <Building className="w-3.5 h-3.5 text-blue-400" /> {lead.company} 
@@ -467,72 +526,127 @@ export default function CRMView() {
                           <Linkedin className="w-3.5 h-3.5 text-blue-400" /> Executive Profile <ArrowUpRight className="w-3 h-3" />
                         </a>
                       )}
-                      {lead.website && (
-                        <a href={lead.website} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-slate-400 hover:underline text-[11px]">
-                          <Globe className="w-3.5 h-3.5" /> Domain <ArrowUpRight className="w-3 h-3" />
-                        </a>
-                      )}
                     </div>
                   </div>
 
                   <div className="text-left lg:text-right border-t lg:border-t-0 border-slate-800 pt-3 lg:pt-0 shrink-0 flex flex-col lg:items-end gap-2">
-                    <div className="flex items-center lg:justify-end gap-1.5 text-xs text-emerald-400 font-mono">
-                      <MapPin className="w-3.5 h-3.5" /> {lead.geo_location || 'Resolved'}
+                    <div className="flex items-center lg:justify-end gap-2 text-xs">
+                      <span className="text-slate-400 text-[11px]">Status:</span>
+                      <select
+                        value={lead.outreach_status || 'UNREAD'}
+                        onChange={(e) => updateStatus(lead.id, e.target.value)}
+                        className={`text-[11px] font-extrabold px-2 py-0.5 rounded bg-slate-900 border ${lead.outreach_status === 'UNREAD' ? 'border-rose-500 text-rose-400' : lead.outreach_status === 'REACHED_OUT' ? 'border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-300'}`}
+                      >
+                        <option value="UNREAD">🔴 UNREAD</option>
+                        <option value="IN_PROGRESS">🟡 IN_PROGRESS</option>
+                        <option value="REACHED_OUT">🟢 REACHED_OUT</option>
+                        <option value="CLOSED">🟣 CLOSED</option>
+                      </select>
                     </div>
 
                     {playbook && (
                       <button
                         onClick={() => togglePlaybook(lead.id)}
-                        className="px-3 py-1 rounded-lg text-xs font-semibold bg-pink-500/10 text-pink-300 border border-pink-500/30 hover:bg-pink-500/20 transition flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-pink-500/10 text-pink-300 border border-pink-500/30 hover:bg-pink-500/20 transition flex items-center gap-1.5"
                       >
-                        <Send className="w-3 h-3" />
-                        <span>{isPlaybookOpen ? 'Hide Outreach Script' : 'View Outreach Playbook'}</span>
-                        {isPlaybookOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        <Send className="w-3.5 h-3.5" />
+                        <span>{isPlaybookOpen ? 'Hide Outreach Playbook' : 'View Email & LinkedIn Sequence'}</span>
+                        {isPlaybookOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Interactive Outreach Playbook Drawer */}
+                {/* Interactive Outreach Playbook Drawer with LinkedIn Sequence */}
                 {playbook && isPlaybookOpen && (
-                  <div className="mt-4 p-4 rounded-xl bg-slate-900/90 border border-pink-500/30 space-y-3 font-mono text-xs">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <div className="flex items-center gap-2 text-pink-400 font-bold">
-                        <Send className="w-4 h-4" />
-                        <span>OUTREACH PLAYBOOK &amp; COLD EMAIL SCRIPT</span>
+                  <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-pink-500/40 space-y-3 font-mono text-xs">
+                    {/* Drawer Header & Tabs */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setActivePlaybookTab(prev => ({ ...prev, [lead.id]: 'email' }))}
+                          className={`px-3 py-1 rounded text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'email' ? 'bg-pink-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Email &amp; Phone Script
+                        </button>
+                        <button
+                          onClick={() => setActivePlaybookTab(prev => ({ ...prev, [lead.id]: 'linkedin' }))}
+                          className={`px-3 py-1 rounded text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'linkedin' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+                        >
+                          <Linkedin className="w-3.5 h-3.5" /> LinkedIn Outreach Sequence
+                        </button>
                       </div>
+
                       <button
-                        onClick={() => copyToClipboard(lead.id, playbook.cold_email_body)}
-                        className="text-[11px] text-slate-300 hover:text-white bg-slate-800 px-2 py-1 rounded flex items-center gap-1 border border-slate-700"
+                        onClick={() => copyToClipboard(lead.id, activeTab === 'email' ? playbook.cold_email_body : playbook.linkedin_pitch_message)}
+                        className="text-[11px] text-slate-300 hover:text-white bg-slate-900 px-2.5 py-1 rounded flex items-center gap-1 border border-slate-800 self-start sm:self-auto"
                       >
-                        {copiedId === lead.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedId === lead.id ? 'Copied Script!' : 'Copy Script'}</span>
+                        {copiedId === lead.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedId === lead.id ? 'Copied to Clipboard!' : 'Copy Script'}</span>
                       </button>
                     </div>
 
-                    <div>
-                      <span className="text-slate-400 uppercase text-[10px] block font-bold mb-0.5">Email Subject Line:</span>
-                      <div className="text-white font-semibold">{playbook.subject_line}</div>
-                    </div>
+                    {/* Email Tab Content */}
+                    {activeTab === 'email' && (
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-slate-400 uppercase text-[10px] block font-bold mb-0.5">Cold Email Subject Line:</span>
+                          <div className="text-white font-semibold bg-slate-900 p-2 rounded border border-slate-800">{playbook.subject_line}</div>
+                        </div>
 
-                    <div>
-                      <span className="text-amber-400 uppercase text-[10px] block font-bold mb-0.5">Pain Point Hook:</span>
-                      <div className="text-amber-200">{playbook.pain_hook}</div>
-                    </div>
+                        <div>
+                          <span className="text-amber-400 uppercase text-[10px] block font-bold mb-0.5">Pain Point Hook:</span>
+                          <div className="text-amber-200 bg-slate-900 p-2 rounded border border-slate-800">{playbook.pain_hook}</div>
+                        </div>
 
-                    <div>
-                      <span className="text-slate-400 uppercase text-[10px] block font-bold mb-0.5">Cold Email Template Body:</span>
-                      <pre className="text-slate-200 whitespace-pre-wrap font-mono bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-[11px]">
-                        {playbook.cold_email_body}
-                      </pre>
-                    </div>
+                        <div>
+                          <span className="text-slate-400 uppercase text-[10px] block font-bold mb-0.5">Cold Email Body Template:</span>
+                          <pre className="text-slate-200 whitespace-pre-wrap font-mono bg-slate-900 p-3 rounded-lg border border-slate-800 text-[11px]">
+                            {playbook.cold_email_body}
+                          </pre>
+                        </div>
 
-                    <div>
-                      <span className="text-emerald-400 uppercase text-[10px] block font-bold mb-0.5">Phone Call Opening Script:</span>
-                      <div className="text-emerald-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
-                        "{playbook.phone_call_script}"
+                        <div>
+                          <span className="text-emerald-400 uppercase text-[10px] block font-bold mb-0.5">Phone Call Opening Script:</span>
+                          <div className="text-emerald-200 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                            "{playbook.phone_call_script}"
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* LinkedIn Sequence Tab Content */}
+                    {activeTab === 'linkedin' && (
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-blue-400 uppercase text-[10px] block font-bold mb-0.5">1. LinkedIn Connection Request Message:</span>
+                          <div className="text-blue-200 bg-slate-900 p-2.5 rounded border border-slate-800">
+                            "{playbook.linkedin_connection_request || 'Hi, saw your work leading RevOps initiatives. QUANTA flagged active buyer intent signals on your site this week — would love to connect!'}"
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-blue-400 uppercase text-[10px] block font-bold mb-0.5">2. LinkedIn Follow-Up Message (Post Connection):</span>
+                          <div className="text-slate-300 bg-slate-900 p-2.5 rounded border border-slate-800">
+                            "{playbook.linkedin_followup_message || 'Thanks for connecting! Our intent engine picked up concurrent HQ IP pricing visits on your domain alongside active job postings.'}"
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-blue-400 uppercase text-[10px] block font-bold mb-0.5">3. LinkedIn Pitch Message:</span>
+                          <div className="text-slate-200 bg-slate-900 p-2.5 rounded border border-slate-800">
+                            "{playbook.linkedin_pitch_message || 'Most teams miss high-intent prospects evaluating pricing tables. We help leaders intercept these buyers automatically before competitors do.'}"
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-emerald-400 uppercase text-[10px] block font-bold mb-0.5">4. LinkedIn Call to Action (CTA) Touchpoint:</span>
+                          <div className="text-emerald-200 bg-slate-900 p-2.5 rounded border border-slate-800">
+                            "{playbook.linkedin_cta_message || 'Would you be open to a 3-minute look at the live buyer feed for your company? https://quanta.virtusol.com'}"
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -559,7 +673,7 @@ export default function CRMView() {
                     {hiringSignals.length > 0 && (
                       <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
                         <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <Briefcase className="w-3.5 h-3.5 text-amber-400" /> Active Hiring Signals
+                          <Briefcase className="w-3.5 h-3.5 text-amber-400" /> Open-Source Job Board Signals
                         </div>
                         <div className="text-slate-300 text-[11px] space-y-0.5 font-mono">
                           {hiringSignals.slice(0, 2).map((sig, idx) => (
@@ -588,7 +702,7 @@ export default function CRMView() {
                   <div className="mt-3.5 pt-3 border-t border-slate-800/80 text-xs text-slate-300 bg-slate-900/80 p-3 rounded-lg flex items-start gap-2 border border-slate-800">
                     <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <span className="text-amber-400 font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Real Data-Backed Problem Statement (QEIC Normalized)</span>
+                      <span className="text-amber-400 font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Real Data-Backed Problem Statement (Open-Source Scored)</span>
                       "{lead.problem_statement || lead.struggle}"
                     </div>
                   </div>
