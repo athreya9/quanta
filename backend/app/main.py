@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import FastAPI, Request, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -17,12 +17,13 @@ from app.alerts import send_slack_alert
 from app.config import SLACK_WEBHOOK_URL, INTENT_MODE
 from app.scoring import calculate_multi_factor_intent_score
 from app.ingestion import process_telemetry_and_score
+from app.deduplication import is_duplicate_signal
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="QUANTA Intent Engine API",
     description="Backend API for QUANTA - Real-time Intent Signal Engine & CRM",
-    version="1.0.0"
+    version="1.2.0"
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -49,6 +50,7 @@ def health_check():
         "database": "SQLite / PostgreSQL Ready",
         "slack_alert_configured": bool(SLACK_WEBHOOK_URL),
         "intent_mode": INTENT_MODE,
+        "deduplication_engine": "30-Minute Signal Window Active",
         "scoring_engine": "8-Factor Behavioral Scoring Active",
         "timestamp": os.popen("date -u").read().strip()
     }
@@ -57,17 +59,17 @@ def health_check():
 def get_extension_version():
     """Returns latest extension version telemetry and auto-update status."""
     return {
-        "version": "1.1.0",
-        "latest_version": "1.1.0",
+        "version": "1.2.0",
+        "latest_version": "1.2.0",
         "download_url": "https://quanta.virtusol.com/extension/quanta-extension.zip",
+        "update_url": "https://quanta.virtusol.com/extension/updates.xml",
         "intent_mode": INTENT_MODE,
         "update_available": False,
         "features": [
-            "Real-time domain matching engine",
-            "8-factor behavioral scoring engine",
-            "Custom 3D infinity loop icons",
-            "Automatic CRM event capture",
-            "Real-time Slack webhooks"
+            "Silent Autonomous Intent Mode",
+            "30-Minute Signal Deduplication Engine",
+            "LinkedIn & Greenhouse Job Post Ingestion",
+            "8-Factor Behavioral Scoring Engine"
         ]
     }
 
@@ -86,6 +88,17 @@ def download_extension_zip():
                 filename="quanta-extension.zip"
             )
     raise HTTPException(status_code=404, detail="Extension ZIP artifact not found")
+
+@app.get("/extension/updates.xml")
+def chrome_extension_updates_xml():
+    """Chrome Extension Auto-Update Manifest for self-hosted updates & Web Store compatibility."""
+    xml_content = """<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='quanta_intent_overlay'>
+    <updatecheck codebase='https://quanta.virtusol.com/extension/quanta-extension.zip' version='1.2.0' />
+  </app>
+</gupdate>"""
+    return Response(content=xml_content, media_type="application/xml")
 
 @app.post("/api/v1/leads", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
@@ -108,8 +121,11 @@ async def register_lead(
     
     db_lead = await create_crm_lead(db, lead, client_ip, user_agent)
     
-    # Trigger Slack alert if high intent and real event
-    if db_lead.intent_score >= 90 and not db_lead.demo_sample:
+    # Check deduplication window to prevent Slack spam
+    is_dup = is_duplicate_signal(db_lead.company, "INBOUND_LEAD_ENQUIRY")
+
+    # Trigger Slack alert if high intent, real event, and not duplicate
+    if db_lead.intent_score >= 90 and not db_lead.demo_sample and not is_dup:
         background_tasks.add_task(
             send_slack_alert,
             company=db_lead.company,
@@ -162,7 +178,7 @@ def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_d
                 company=ext.company or f"Domain ({ext.domain})",
                 domain=ext.domain,
                 event_type=ext.event_type,
-                description=f"Active Chrome Extension intercept on {ext.domain}. URL: {ext.url or 'N/A'}",
+                description=enrichment.get("problem_statement") or f"Active autonomous intent intercept on {ext.domain}.",
                 signal_text=f"Extension signal capture on {ext.domain}",
                 source_url=ext.url or f"https://{ext.domain}",
                 detected_at="Just now",
@@ -197,10 +213,15 @@ async def extension_ingest(
 ):
     """
     Ingests Chrome extension signals directly into extension_signals table in quanta_crm.db
-    with 8-factor behavioral intent scoring and triggers real-time Slack alerts for high intent events.
+    with 30-minute deduplication, 8-factor behavioral intent scoring, and Slack alerts.
     """
+    clean_domain = payload.domain.replace("www.", "").lower().strip()
+    
+    # 30-Minute Deduplication Check
+    is_dup = is_duplicate_signal(clean_domain, payload.event_type)
+
     processed = process_telemetry_and_score({
-        "domain": payload.domain,
+        "domain": clean_domain,
         "url": payload.url,
         "company": payload.company,
         "event_type": payload.event_type,
@@ -228,41 +249,45 @@ async def extension_ingest(
     db.commit()
     db.refresh(db_signal)
 
-    # Also record into leads table for CRM visibility
+    # Record into leads table with real data-backed problem statement
     client_ip = request.headers.get("X-Forwarded-For") or request.client.host
     if "," in client_ip:
         client_ip = client_ip.split(",")[0].strip()
-    clean_domain = payload.domain.replace("www.", "").lower()
+        
     lead_data = LeadCreate(
-        name="Chrome Extension Intercept",
-        email=f"intent@{clean_domain}",
-        company=payload.company or f"Domain ({payload.domain})",
-        role="Active Extension Prospect",
-        website=payload.url or f"https://{payload.domain}",
+        name="Autonomous Intent Intercept",
+        email=f"contact@{clean_domain}",
+        company=payload.company or f"Domain ({clean_domain})",
+        role="Active Prospect",
+        website=payload.url or f"https://{clean_domain}",
         country="Extension Stream",
         phone=None,
-        problem_statement=f"Chrome Extension captured active intent on '{payload.domain}' [{payload.event_type}] Score: {processed['intent_score']}",
-        struggle=f"Extension signal capture on {payload.domain}",
+        problem_statement=processed["problem_statement"],
+        struggle=processed["problem_statement"],
         demo_sample=payload.demo_sample or False
     )
     await create_crm_lead(db, lead_data, client_ip, request.headers.get("User-Agent", "QUANTA Chrome Extension"))
 
-    # Only fire Slack alert if real signal (demo_sample = False) and intent_score >= 90
-    if processed["intent_score"] >= 90 and not payload.demo_sample:
+    # Only fire Slack alert if real signal (demo_sample = False), high intent (>=90), and NOT a 30-min duplicate!
+    slack_dispatched = False
+    if processed["intent_score"] >= 90 and not payload.demo_sample and not is_dup:
         background_tasks.add_task(
             send_slack_alert,
             company=processed["company"],
             event_type=processed["event_type"],
-            description=f"🎯 Real Chrome Extension intent captured on domain '{payload.domain}' [8-Factor Score: {processed['intent_score']}] URL: {payload.url or 'N/A'}",
+            description=f"🎯 {processed['problem_statement']} [URL: {payload.url or 'N/A'}]",
             intent_score=processed["intent_score"],
-            source_url=payload.url or f"https://{payload.domain}"
+            source_url=payload.url or f"https://{clean_domain}"
         )
+        slack_dispatched = True
         
     return {
         "status": "ingested",
         "signal_id": db_signal.id,
-        "domain": payload.domain,
+        "domain": clean_domain,
         "intent_score": processed["intent_score"],
+        "is_duplicate": is_dup,
+        "slack_dispatched": slack_dispatched,
         "scoring_breakdown": processed["scoring_breakdown"],
         "intent_mode": INTENT_MODE
     }
@@ -275,8 +300,7 @@ async def capture_extension_event(
     db: Session = Depends(get_db)
 ):
     """
-    Ingests Chrome extension domain intercepts directly into quanta_crm.db
-    and triggers real-time Slack alerts for high intent events.
+    Ingests Chrome extension domain intercepts directly into quanta_crm.db.
     """
     payload = ExtensionIngestPayload(
         domain=event.domain,

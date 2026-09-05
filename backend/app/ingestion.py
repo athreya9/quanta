@@ -2,7 +2,7 @@ import logging
 import httpx
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from app.scoring import calculate_multi_factor_intent_score
+from app.scoring import calculate_multi_factor_intent_score, generate_real_problem_statement
 
 logger = logging.getLogger("quanta.ingestion")
 
@@ -12,7 +12,6 @@ async def ingest_external_crunchbase_funding(domain: str) -> Optional[Dict[str, 
     """
     clean_domain = domain.lower().replace("www.", "")
     try:
-        # Query public funding signal endpoint or feed
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(f"https://api.crunchbase.com/v4/data/organizations/{clean_domain}", follow_redirects=True)
             if res.status_code == 200:
@@ -47,7 +46,7 @@ async def ingest_builtwith_wappalyzer_techstack(domain: str) -> Optional[Dict[st
 def process_telemetry_and_score(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Processes incoming extension/external telemetry, runs the 8-factor scoring engine,
-    and returns enriched signal telemetry.
+    generates real data-backed problem statements, and returns enriched signal telemetry.
     """
     domain = payload.get("domain", "").lower().replace("www.", "")
     url = payload.get("url", "")
@@ -55,8 +54,8 @@ def process_telemetry_and_score(payload: Dict[str, Any]) -> Dict[str, Any]:
     concurrent_ips = payload.get("concurrent_hq_ips", 3)
     
     scoring_telemetry = {
-        "hiring_roles_count": payload.get("hiring_roles_count", 2),
-        "tech_stack_changes_count": payload.get("tech_stack_changes_count", 2),
+        "hiring_roles_count": payload.get("hiring_roles_count", 2 if payload.get("event_type") == "JOB_POST_INTERCEPT" else 1),
+        "tech_stack_changes_count": payload.get("tech_stack_changes_count", 1),
         "funding_round": payload.get("funding_round", "Series A"),
         "dwell_time_seconds": dwell_time,
         "concurrent_hq_ips": concurrent_ips,
@@ -66,6 +65,7 @@ def process_telemetry_and_score(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     score_res = calculate_multi_factor_intent_score(scoring_telemetry)
+    problem_text = generate_real_problem_statement(domain, score_res["score_breakdown"], scoring_telemetry)
 
     return {
         "domain": domain,
@@ -74,6 +74,7 @@ def process_telemetry_and_score(payload: Dict[str, Any]) -> Dict[str, Any]:
         "event_type": payload.get("event_type", "PRICING_PAGE_INTERCEPT"),
         "intent_score": score_res["intent_score"],
         "scoring_breakdown": score_res["score_breakdown"],
+        "problem_statement": problem_text,
         "source": payload.get("source", "chrome_extension"),
         "geo_location": payload.get("geo_location", "Real Telemetry"),
         "browser_fingerprint": payload.get("browser_fingerprint"),
