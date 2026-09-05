@@ -63,6 +63,7 @@ def health_check():
         "scoring_engine": "8-Factor Behavioral Scoring Active",
         "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running)",
         "autonomous_intent_crawler": "Active (QEIC 24/7 Multi-Source Engine Running)",
+        "outsourcing_intent_engine": "Active (Upwork RSS, SAM.gov RFPs, Reddit, GitHub Bounties Engine Running)",
         "timestamp": os.popen("date -u").read().strip()
     }
 
@@ -236,6 +237,15 @@ async def run_qeic_crawler_pass(db: Session = Depends(get_db)):
     """
     from app.crawler import execute_qeic_crawl_and_lead_build
     res = await execute_qeic_crawl_and_lead_build(db)
+    return res
+
+@app.post("/api/v1/crawler/outsourcing")
+async def run_outsourcing_intent_crawl_pass(db: Session = Depends(get_db)):
+    """
+    Triggers a live OUTSOURCING INTENT crawl pass across Upwork RSS, SAM.gov RFPs, Reddit, Clutch, and GitHub Bounties.
+    """
+    from app.outsourcing_crawler import execute_outsourcing_intent_crawl
+    res = await execute_outsourcing_intent_crawl(db)
     return res
 
 @app.get("/api/v1/leads/outreach-ready", response_model=list[LeadResponse])

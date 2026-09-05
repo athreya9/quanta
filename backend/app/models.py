@@ -58,6 +58,9 @@ class LeadDB(Base):
     activity_log = Column(Text, nullable=True)
     unread_intent = Column(Boolean, default=True)
 
+    # OUTSOURCING INTENT ENGINE FIELDS
+    outsourcing_intent_metadata = Column(Text, nullable=True)
+
 class ExtensionSignalDB(Base):
     """
     SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
@@ -132,6 +135,7 @@ class LeadResponse(BaseModel):
     activity_log: Optional[str] = None
     unread_intent: Optional[bool] = True
     lead_age: Optional[str] = "Just now"
+    outsourcing_intent_metadata: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -46,6 +46,7 @@ def init_db():
             "ALTER TABLE leads ADD COLUMN lead_notes TEXT",
             "ALTER TABLE leads ADD COLUMN activity_log TEXT",
             "ALTER TABLE leads ADD COLUMN unread_intent BOOLEAN DEFAULT 1",
+            "ALTER TABLE leads ADD COLUMN outsourcing_intent_metadata TEXT",
             "ALTER TABLE extension_signals ADD COLUMN geo_location VARCHAR(255)",
             "ALTER TABLE extension_signals ADD COLUMN browser_fingerprint TEXT",
             "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT",
