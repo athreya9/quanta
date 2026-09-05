@@ -10,6 +10,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+import asyncio
 from app.models import LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
@@ -18,6 +19,7 @@ from app.config import SLACK_WEBHOOK_URL, INTENT_MODE
 from app.scoring import calculate_multi_factor_intent_score
 from app.ingestion import process_telemetry_and_score
 from app.deduplication import is_duplicate_signal
+from app.lead_enrichment_worker import start_periodic_enrichment_loop, run_enrichment_worker_cycle
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
@@ -38,8 +40,11 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     init_db()
+    # Trigger initial ALEP cycle and start 5-minute background cron worker
+    asyncio.create_task(run_enrichment_worker_cycle())
+    asyncio.create_task(start_periodic_enrichment_loop(interval_seconds=300))
 
 @app.get("/api/v1/health")
 def health_check():
@@ -52,6 +57,7 @@ def health_check():
         "intent_mode": INTENT_MODE,
         "deduplication_engine": "30-Minute Signal Window Active",
         "scoring_engine": "8-Factor Behavioral Scoring Active",
+        "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running)",
         "timestamp": os.popen("date -u").read().strip()
     }
 
@@ -147,6 +153,16 @@ def list_leads(db: Session = Depends(get_db), limit: int = 50):
     if INTENT_MODE == "production":
         return [l for l in all_leads if not getattr(l, 'demo_sample', False)]
     return all_leads
+
+@app.post("/api/v1/crm/enrich")
+async def trigger_alep_enrichment(db: Session = Depends(get_db)):
+    """
+    Manually trigger ALEP (Automatic Lead Enrichment Engine) scan and batch enrichment cycle.
+    Enriches missing fields (email, phone, role, LinkedIn, tech stack, hiring/funding signals) without overwriting original data.
+    """
+    from app.enrichment import run_batch_lead_enrichment
+    res = await run_batch_lead_enrichment(db, limit=50)
+    return res
 
 @app.get("/api/v1/signals", response_model=list[SignalItem])
 def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_db)):

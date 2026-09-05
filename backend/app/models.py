@@ -82,6 +82,17 @@ class LeadResponse(BaseModel):
     demo_sample: bool = False
     created_at: datetime.datetime
 
+    # STEP 8 Enriched Output Fields
+    enriched_email: Optional[str] = None
+    enriched_phone: Optional[str] = None
+    enriched_role: Optional[str] = None
+    enriched_linkedin: Optional[str] = None
+    enriched_company_size: Optional[str] = None
+    enriched_tech_stack: Optional[str] = None
+    enriched_hiring_signals: Optional[str] = None
+    enriched_funding_signals: Optional[str] = None
+    enrichment_status: Optional[str] = "PENDING"
+
     class Config:
         from_attributes = True
 
