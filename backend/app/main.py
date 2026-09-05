@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
