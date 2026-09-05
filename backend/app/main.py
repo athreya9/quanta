@@ -64,7 +64,23 @@ def health_check():
         "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running)",
         "autonomous_intent_crawler": "Active (QEIC 24/7 Multi-Source Engine Running)",
         "outsourcing_intent_engine": "Active (Upwork RSS, SAM.gov RFPs, Reddit, GitHub Bounties Engine Running)",
+        "telemetry_stream": "Active (Real-time ring buffer online)",
         "timestamp": os.popen("date -u").read().strip()
+    }
+
+@app.get("/api/v1/telemetry/logs")
+def get_telemetry_logs(limit: int = 100, tool: Optional[str] = "all"):
+    """
+    Returns real-time telemetry events and raw outputs from QEIC crawler, Outsourcing crawler,
+    ALEP enrichment engine, Deduplication engine, Slack alerts, and database writers.
+    """
+    from app.telemetry import get_recent_telemetry
+    events = get_recent_telemetry(limit=limit, tool_filter=tool)
+    return {
+        "status": "active",
+        "total_events": len(events),
+        "tool_filter": tool,
+        "events": events
     }
 
 @app.get("/api/v1/extension/version")

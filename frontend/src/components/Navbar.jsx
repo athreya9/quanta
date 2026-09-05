@@ -102,6 +102,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
             </span>
           )}
         </button>
+        <button 
+          onClick={() => setActiveTab('telemetry')} 
+          className={`hover:text-white flex items-center gap-1.5 transition py-1 ${activeTab === 'telemetry' ? 'text-emerald-400 font-semibold' : ''}`}
+        >
+          <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <span>Telemetry Stream</span>
+        </button>
         <a href="#faq" onClick={() => setActiveTab('landing')} className="hover:text-white transition py-1">
           B2B FAQs
         </a>

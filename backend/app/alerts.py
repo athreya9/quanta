@@ -66,10 +66,40 @@ async def send_slack_alert(
             response = await client.post(SLACK_WEBHOOK_URL, json=payload)
             if response.status_code == 200:
                 logger.info(f"[Slack Alert Sent] Dispatched alert for {company}")
+                try:
+                    from app.telemetry import log_telemetry_event
+                    log_telemetry_event(
+                        tool_name="Slack Alerts Engine",
+                        status="COMPLETED",
+                        raw_payload={"company": company, "event_type": event_type, "intent_score": intent_score},
+                        raw_output={"slack_status": 200, "message": f"Webhook alert delivered for {company}"}
+                    )
+                except Exception:
+                    pass
                 return True
             else:
                 logger.warning(f"[Slack Alert Error] Status {response.status_code}: {response.text}")
+                try:
+                    from app.telemetry import log_telemetry_event
+                    log_telemetry_event(
+                        tool_name="Slack Alerts Engine",
+                        status="ERROR",
+                        raw_payload={"company": company, "event_type": event_type},
+                        raw_error=f"Slack webhook HTTP {response.status_code}: {response.text}"
+                    )
+                except Exception:
+                    pass
                 return False
     except Exception as e:
         logger.error(f"[Slack Alert Exception] Failed to send alert for {company}: {e}")
+        try:
+            from app.telemetry import log_telemetry_event
+            log_telemetry_event(
+                tool_name="Slack Alerts Engine",
+                status="ERROR",
+                raw_payload={"company": company, "event_type": event_type},
+                raw_error=str(e)
+            )
+        except Exception:
+            pass
         return False

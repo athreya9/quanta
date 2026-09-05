@@ -357,9 +357,23 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
     if new_signals_count > 0 or new_leads_count > 0:
         db.commit()
 
-    return {
+    res = {
         "status": "completed",
         "scanned_targets": len(TARGET_CRAWL_DOMAINS),
         "new_signals_ingested": new_signals_count,
         "new_outreach_leads_generated": new_leads_count
     }
+
+    try:
+        from app.telemetry import log_telemetry_event
+        log_telemetry_event(
+            tool_name="QEIC Autonomous Intent Crawler",
+            status="COMPLETED",
+            raw_payload={"targets_count": len(TARGET_CRAWL_DOMAINS)},
+            raw_output=res,
+            raw_ingestion={"signals": new_signals_count, "leads": new_leads_count}
+        )
+    except Exception:
+        pass
+
+    return res

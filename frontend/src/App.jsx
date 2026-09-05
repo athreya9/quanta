@@ -9,7 +9,7 @@ import SignalFeed from './components/SignalFeed';
 import FAQSection from './components/FAQSection';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import BottomNav from './components/BottomNav';
-import LogoDownloader from './components/LogoDownloader';
+import TelemetryView from './components/TelemetryView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('landing');
@@ -40,6 +40,10 @@ export default function App() {
 
         {activeTab === 'crm' && (
           <CRMView />
+        )}
+
+        {activeTab === 'telemetry' && (
+          <TelemetryView />
         )}
       </main>
 

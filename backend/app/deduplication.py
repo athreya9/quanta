@@ -26,6 +26,16 @@ def is_duplicate_signal(domain: str, event_type: str) -> bool:
         last_time = RECENT_SIGNALS_CACHE[key]
         if now - last_time < DEDUP_WINDOW_SECONDS:
             logger.info(f"[Deduplication Engine] Suppressed duplicate signal for {clean_domain} [{event_type}] ({int(now - last_time)}s ago)")
+            try:
+                from app.telemetry import log_telemetry_event
+                log_telemetry_event(
+                    tool_name="Deduplication Engine",
+                    status="WARNING",
+                    raw_payload={"domain": clean_domain, "event_type": event_type, "time_since_last_sec": int(now - last_time)},
+                    raw_output={"suppressed": True, "action": "Slack alert and lead duplication blocked"}
+                )
+            except Exception:
+                pass
             return True
             
     # Record new timestamp
