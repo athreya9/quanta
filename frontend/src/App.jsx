@@ -10,6 +10,7 @@ import FAQSection from './components/FAQSection';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import BottomNav from './components/BottomNav';
 import TelemetryView from './components/TelemetryView';
+import LogoDownloader from './components/LogoDownloader';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('landing');

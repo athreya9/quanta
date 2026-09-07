@@ -247,7 +247,7 @@ export default function TelemetryView() {
                 {/* Raw Inspector Drawer */}
                 {isExpanded && (
                   <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-3 text-xs">
-                    {event.raw_payload && Object.keys(event.raw_payload).length > 0 && (
+                    {event.raw_payload && typeof event.raw_payload === 'object' && Object.keys(event.raw_payload).length > 0 && (
                       <div>
                         <span className="text-blue-400 font-bold uppercase text-[10px] block mb-1">RAW PAYLOAD (INPUT)</span>
                         <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-slate-200 overflow-x-auto text-[11px]">
@@ -256,7 +256,7 @@ export default function TelemetryView() {
                       </div>
                     )}
 
-                    {event.raw_output && Object.keys(event.raw_output).length > 0 && (
+                    {event.raw_output && typeof event.raw_output === 'object' && Object.keys(event.raw_output).length > 0 && (
                       <div>
                         <span className="text-emerald-400 font-bold uppercase text-[10px] block mb-1">RAW OUTPUT (RESULT)</span>
                         <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-emerald-300 overflow-x-auto text-[11px]">
@@ -269,12 +269,12 @@ export default function TelemetryView() {
                       <div>
                         <span className="text-rose-400 font-bold uppercase text-[10px] block mb-1">RAW ERROR TRACEBACK</span>
                         <pre className="bg-slate-950 p-3 rounded-lg border border-rose-500/30 text-rose-300 overflow-x-auto text-[11px]">
-                          {event.raw_error}
+                          {typeof event.raw_error === 'object' ? JSON.stringify(event.raw_error, null, 2) : String(event.raw_error)}
                         </pre>
                       </div>
                     )}
 
-                    {event.raw_ingestion && Object.keys(event.raw_ingestion).length > 0 && (
+                    {event.raw_ingestion && typeof event.raw_ingestion === 'object' && Object.keys(event.raw_ingestion).length > 0 && (
                       <div>
                         <span className="text-amber-400 font-bold uppercase text-[10px] block mb-1">RAW INGESTION DETAILS</span>
                         <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-amber-200 overflow-x-auto text-[11px]">
