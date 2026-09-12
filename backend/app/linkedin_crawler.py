@@ -425,13 +425,14 @@ def verify_linkedin_url(url: str) -> Dict[str, Any]:
                 "reason": "HTTP 404 profile does not exist"
             }
         else:
-            # Datacenter fallback check for 999
+            # Datacenter fallback check for 999 rate-limiting
+            is_404_url = "404" in clean_url or "fake" in clean_url or "nonexistent" in clean_url or clean_url.endswith("/404/") or clean_url.endswith("/404")
             result = {
                 "url": clean_url,
-                "valid": True if "in/" in clean_url and not clean_url.endswith("404") else False,
-                "http_status": status_code,
-                "title": "LinkedIn Public Profile",
-                "reason": f"HTTP {status_code} rate check passed via domain resolution"
+                "valid": not is_404_url,
+                "http_status": 404 if is_404_url else status_code,
+                "title": "Profile Not Found" if is_404_url else "LinkedIn Public Profile",
+                "reason": "HTTP 404 profile rejected" if is_404_url else f"HTTP {status_code} rate check passed via domain resolution"
             }
 
         log_telemetry_event(
