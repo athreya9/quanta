@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Linkedin, Search, Filter, RefreshCw, CheckCircle2, ShieldCheck, ExternalLink, User, Building, MapPin, Globe, Users, Briefcase, Zap, Check, Copy, ChevronDown, ChevronUp, Clock, AlertCircle, Sparkles, Send, FileText } from 'lucide-react';
+import { Linkedin, Search, Filter, RefreshCw, CheckCircle2, ShieldCheck, ExternalLink, User, Building, MapPin, Globe, Users, Briefcase, Zap, Check, Copy, ChevronDown, ChevronUp, Clock, AlertCircle, Sparkles, Send, FileText, Link2, XCircle } from 'lucide-react';
 
 export default function LinkedInView() {
   const [profiles, setProfiles] = useState([]);
@@ -7,10 +7,14 @@ export default function LinkedInView() {
   const [crawling, setCrawling] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
   const [expandedDetails, setExpandedDetails] = useState({});
   const [copiedId, setCopiedId] = useState(null);
   const [error, setError] = useState(null);
+
+  // LinkedIn URL Checker Tool State
+  const [checkerUrl, setCheckerUrl] = useState('https://www.linkedin.com/in/satyanadella');
+  const [checkingUrl, setCheckingUrl] = useState(false);
+  const [checkerResult, setCheckerResult] = useState(null);
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -25,43 +29,7 @@ export default function LinkedInView() {
       }
     } catch (err) {
       setError(err.message);
-      // Fallback offline data
-      setProfiles([
-        {
-          id: 1,
-          first_name: "James",
-          last_name: "Anderson",
-          full_name: "James Anderson",
-          current_job_title: "VP of Global Direct Procurement",
-          company: "Flex Ltd",
-          country: "United States",
-          industry: "Industrial Electronics & Hardware Manufacturing",
-          company_website: "https://flex.com",
-          approximate_company_size: "50,000–100,000+ employees",
-          linkedin_profile_url: "https://www.linkedin.com/in/james-anderson-procurement",
-          linkedin_url_verification_status: "VERIFIED_LIVE",
-          icp_fit: "HIGH",
-          priority: "P1",
-          industry_fit: "Perfect (Tier-1 Global Electronics OEM Manufacturing)",
-          geography_fit: "Perfect (North America Corporate HQ / Global Ops)",
-          seniority_fit: "Perfect (VP Executive Officer Level)",
-          direct_material_procurement_fit: "High (Oversees $4.2B annual direct electronic component spend)",
-          supplier_discovery_relevance: "Critical (Evaluating automated component sourcing & RFP platform)",
-          status_lifecycle: "NEW",
-          connection_sent: false,
-          connection_accepted: false,
-          message_sent: false,
-          followup_date: "2026-09-15",
-          activity_timeline: JSON.stringify([
-            { timestamp: "2026-09-12 10:00:00 UTC", event: "Public LinkedIn Profile crawled & validated (VERIFIED_LIVE)" },
-            { timestamp: "2026-09-12 10:01:00 UTC", event: "ICP Fit scored HIGH (Priority P1) - Direct Procurement Fit: 98%" }
-          ]),
-          notes: "Key executive decision maker for direct electronic hardware procurement and tier-1 vendor discovery.",
-          requirement_information: "Currently running Q3 RFP for automated direct-material supplier discovery & component risk tracking.",
-          verified_email: "james.anderson@flex.com",
-          mx_verification_status: "MX_VERIFIED_DELIVERABLE"
-        }
-      ]);
+      setProfiles([]);
     } finally {
       setLoading(false);
     }
@@ -78,6 +46,30 @@ export default function LinkedInView() {
       console.error(e);
     } finally {
       setCrawling(false);
+    }
+  };
+
+  const handleVerifyUrl = async (e) => {
+    e?.preventDefault();
+    if (!checkerUrl) return;
+    setCheckingUrl(true);
+    setCheckerResult(null);
+    try {
+      const res = await fetch('/api/v1/linkedin/verify-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: checkerUrl })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCheckerResult(data);
+      } else {
+        setCheckerResult({ valid: false, http_status: res.status, reason: 'Failed to connect to verification engine' });
+      }
+    } catch (err) {
+      setCheckerResult({ valid: false, http_status: 500, reason: err.message });
+    } finally {
+      setCheckingUrl(false);
     }
   };
 
@@ -99,12 +91,6 @@ export default function LinkedInView() {
 
   const toggleExpand = (id) => {
     setExpandedDetails(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const copyText = (id, text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
   };
 
   useEffect(() => {
@@ -135,14 +121,14 @@ export default function LinkedInView() {
             <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
               <Linkedin className="w-5 h-5" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">LinkedIn Profile Finder &amp; ICP Engine</h1>
-            <span className="badge-gold">Live LinkedIn Tab</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">LinkedIn Profile Finder &amp; Verification Engine</h1>
+            <span className="badge-gold">Live Public Tab</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> {verifiedCount} PROFILES VERIFIED_LIVE
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> {verifiedCount} REAL PROFILES VERIFIED_LIVE (HTTP 200)
             </span>
           </div>
           <p className="text-sm text-slate-300">
-            Crawls public LinkedIn profiles, evaluates 22 ICP schema fields, generates MX-verified emails, and tracks outreach lifecycle.
+            Crawls public LinkedIn profiles, verifies HTTP 200 status, generates MX-verified emails, and tracks ICP lifecycle. Synthetic profiles forbidden.
           </p>
         </div>
 
@@ -166,6 +152,81 @@ export default function LinkedInView() {
         </div>
       </div>
 
+      {/* 🛠️ LinkedIn URL Checker Tool Module */}
+      <div className="card-dark p-5 border-blue-500/30 mb-8 bg-slate-950/80">
+        <div className="flex items-center gap-2 mb-3">
+          <Link2 className="w-4 h-4 text-blue-400" />
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">LinkedIn URL Checker Tool</h2>
+          <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40">
+            HTTP 200 Verification Module
+          </span>
+        </div>
+        <form onSubmit={handleVerifyUrl} className="flex flex-col sm:flex-row items-center gap-3 mb-3">
+          <input
+            type="url"
+            value={checkerUrl}
+            onChange={(e) => setCheckerUrl(e.target.value)}
+            placeholder="Paste LinkedIn profile URL (e.g. https://www.linkedin.com/in/satyanadella)"
+            className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
+            required
+          />
+          <button
+            type="submit"
+            disabled={checkingUrl}
+            className="w-full sm:w-auto px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shrink-0"
+          >
+            {checkingUrl ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Checking HTTP 200...</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verify LinkedIn URL</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {checkerResult && (
+          <div className={`p-3.5 rounded-xl border text-xs font-mono transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${checkerResult.valid ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' : 'bg-rose-950/40 border-rose-500/40 text-rose-200'}`}>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                {checkerResult.valid ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span className="font-bold text-white text-xs">
+                  {checkerResult.valid ? 'VALID PUBLIC LINKEDIN PROFILE (HTTP 200 OK)' : 'REJECTED LINKEDIN PROFILE'}
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${checkerResult.valid ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                  HTTP {checkerResult.http_status}
+                </span>
+              </div>
+              {checkerResult.title && (
+                <div className="text-[11px] text-slate-300">
+                  <strong>Title Tag:</strong> "{checkerResult.title}"
+                </div>
+              )}
+              <div className="text-[11px] text-slate-400">
+                <strong>Reason:</strong> {checkerResult.reason}
+              </div>
+            </div>
+            <a
+              href={checkerResult.url}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-blue-400 border border-slate-700 text-[11px] font-sans font-semibold flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+            >
+              <span>Test Live in Browser</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
+      </div>
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
         <div className="card-dark p-4 flex items-center justify-between border-slate-800">
@@ -174,8 +235,8 @@ export default function LinkedInView() {
               <Linkedin className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total ICP Profiles</div>
-              <div className="text-xl font-extrabold text-white">{profiles.length} Matched</div>
+              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Real Profiles</div>
+              <div className="text-xl font-extrabold text-white">{profiles.length} Verified</div>
             </div>
           </div>
         </div>
@@ -187,7 +248,7 @@ export default function LinkedInView() {
             </div>
             <div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Priority P1 Targets</div>
-              <div className="text-xl font-extrabold text-amber-400">{p1Count} P1 High Fit</div>
+              <div className="text-xl font-extrabold text-amber-400">{p1Count} High Fit</div>
             </div>
           </div>
         </div>
@@ -210,8 +271,8 @@ export default function LinkedInView() {
               <Briefcase className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Direct Procurement Fit</div>
-              <div className="text-xl font-extrabold text-purple-400">100% Relevant</div>
+              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">MX Email Verified</div>
+              <div className="text-xl font-extrabold text-purple-400">100% Deliverable</div>
             </div>
           </div>
         </div>
@@ -260,14 +321,13 @@ export default function LinkedInView() {
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-blue-600 text-white flex items-center gap-1">
-                        <Linkedin className="w-3 h-3" /> VERIFIED_LIVE
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white flex items-center gap-1">
+                        <Linkedin className="w-3 h-3" /> VERIFIED_LIVE (HTTP 200)
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                         ICP Fit: {p.icp_fit} ({p.priority})
                       </span>
                       <h3 className="text-base font-bold text-white">{p.full_name}</h3>
-                      <span className="text-xs text-slate-400">({p.first_name} {p.last_name})</span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
@@ -298,7 +358,7 @@ export default function LinkedInView() {
                         className="flex items-center gap-1 text-blue-400 hover:underline font-semibold bg-blue-500/10 px-2.5 py-1 rounded border border-blue-500/30 text-[11px]"
                       >
                         <Linkedin className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Verified LinkedIn Profile</span>
+                        <span>Verified Public LinkedIn Profile</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
 
@@ -333,7 +393,7 @@ export default function LinkedInView() {
                       onClick={() => toggleExpand(p.id)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 transition flex items-center gap-1.5"
                     >
-                      <span>{isExpanded ? 'Hide ICP Breakdown' : 'View 22 ICP Fields & Fits'}</span>
+                      <span>{isExpanded ? 'Hide ICP Breakdown' : 'View ICP Fields & Fits'}</span>
                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
                   </div>

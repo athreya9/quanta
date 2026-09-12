@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 
 import asyncio
 from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate
-from app.linkedin_crawler import crawl_linkedin_icp_profiles, seed_linkedin_icp_profiles
+from app.linkedin_crawler import crawl_linkedin_icp_profiles, seed_linkedin_icp_profiles, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
@@ -255,6 +255,19 @@ def trigger_linkedin_icp_crawl(db: Session = Depends(get_db)):
     """
     result = crawl_linkedin_icp_profiles(db)
     return result
+
+@app.post("/api/v1/linkedin/verify-url")
+@app.get("/api/v1/linkedin/verify-url")
+def api_verify_linkedin_url(url: Optional[str] = None, payload: Optional[dict] = None):
+    """
+    LinkedIn URL Checker API Tool Endpoint:
+    Sends HTTP request with facebookexternalhit/1.1 headers to validate live public LinkedIn profiles.
+    Rejects 404/302/login-wall pages.
+    """
+    target_url = url or (payload.get("url") if payload else "")
+    if not target_url:
+        raise HTTPException(status_code=400, detail="Parameter 'url' is required")
+    return verify_linkedin_url(target_url)
 
 @app.patch("/api/v1/linkedin/profiles/{profile_id}")
 def update_linkedin_profile(profile_id: int, payload: LinkedInProfileUpdate, db: Session = Depends(get_db)):
