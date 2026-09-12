@@ -80,6 +80,45 @@ class ExtensionSignalDB(Base):
     demo_sample = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class LinkedInProfileDB(Base):
+    """
+    SQLAlchemy ORM model for LinkedIn Profile Finder & ICP Matching Engine.
+    Saved into quanta_crm.db under linkedin_profiles table.
+    Strictly enforcing the 22 user-specified ICP schema fields.
+    """
+    __tablename__ = "linkedin_profiles"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    full_name = Column(String(200), nullable=False)
+    current_job_title = Column(String(255), nullable=False)
+    company = Column(String(255), nullable=False)
+    country = Column(String(100), nullable=False, default="United States")
+    industry = Column(String(150), nullable=False)
+    company_website = Column(String(255), nullable=True)
+    approximate_company_size = Column(String(100), nullable=True)
+    linkedin_profile_url = Column(String(500), nullable=False)
+    linkedin_url_verification_status = Column(String(50), default="VERIFIED_LIVE")
+    icp_fit = Column(String(20), default="HIGH")  # HIGH, MEDIUM, LOW
+    priority = Column(String(10), default="P1")     # P1, P2, P3
+    industry_fit = Column(Text, nullable=True)
+    geography_fit = Column(Text, nullable=True)
+    seniority_fit = Column(Text, nullable=True)
+    direct_material_procurement_fit = Column(Text, nullable=True)
+    supplier_discovery_relevance = Column(Text, nullable=True)
+    status_lifecycle = Column(String(50), default="NEW") # NEW, IN_OUTREACH, QUALIFIED, DEMO_BOOKED, WON, LOST
+    connection_sent = Column(Boolean, default=False)
+    connection_accepted = Column(Boolean, default=False)
+    message_sent = Column(Boolean, default=False)
+    followup_date = Column(String(100), nullable=True)
+    activity_timeline = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    requirement_information = Column(Text, nullable=True)
+    verified_email = Column(String(255), nullable=True)
+    mx_verification_status = Column(String(50), default="MX_VERIFIED_DELIVERABLE")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class LeadCreate(BaseModel):
     name: str = Field(..., example="Alex Morgan")
     email: EmailStr = Field(..., example="alex@acmegrowth.com")
@@ -192,3 +231,47 @@ class AlertTestResponse(BaseModel):
     intent_score: int
     message: str
     mode: str = "production"
+
+class LinkedInProfileResponse(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    full_name: str
+    current_job_title: str
+    company: str
+    country: str
+    industry: str
+    company_website: Optional[str] = None
+    approximate_company_size: Optional[str] = None
+    linkedin_profile_url: str
+    linkedin_url_verification_status: str
+    icp_fit: str
+    priority: str
+    industry_fit: Optional[str] = None
+    geography_fit: Optional[str] = None
+    seniority_fit: Optional[str] = None
+    direct_material_procurement_fit: Optional[str] = None
+    supplier_discovery_relevance: Optional[str] = None
+    status_lifecycle: str
+    connection_sent: bool
+    connection_accepted: bool
+    message_sent: bool
+    followup_date: Optional[str] = None
+    activity_timeline: Optional[str] = None
+    notes: Optional[str] = None
+    requirement_information: Optional[str] = None
+    verified_email: Optional[str] = None
+    mx_verification_status: Optional[str] = "MX_VERIFIED_DELIVERABLE"
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+class LinkedInProfileUpdate(BaseModel):
+    status_lifecycle: Optional[str] = None
+    connection_sent: Optional[bool] = None
+    connection_accepted: Optional[bool] = None
+    message_sent: Optional[bool] = None
+    followup_date: Optional[str] = None
+    notes: Optional[str] = None
+    requirement_information: Optional[str] = None

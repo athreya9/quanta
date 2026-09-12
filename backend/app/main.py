@@ -11,7 +11,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate
+from app.linkedin_crawler import crawl_linkedin_icp_profiles, seed_linkedin_icp_profiles
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
@@ -234,6 +235,55 @@ def update_lead_outreach_status(lead_id: int, new_status: str, db: Session = Dep
         lead.unread_intent = False
     db.commit()
     return {"status": "updated", "lead_id": lead_id, "outreach_status": status_upper}
+
+@app.get("/api/v1/linkedin/profiles", response_model=list[LinkedInProfileResponse])
+def get_linkedin_icp_profiles(db: Session = Depends(get_db)):
+    """
+    Returns all public ICP-matched LinkedIn profiles from quanta_crm.db under linkedin_profiles table.
+    Enforces the 22 user-specified ICP schema fields.
+    """
+    profiles = db.query(LinkedInProfileDB).order_by(LinkedInProfileDB.created_at.desc()).all()
+    if len(profiles) == 0:
+        seed_linkedin_icp_profiles(db)
+        profiles = db.query(LinkedInProfileDB).order_by(LinkedInProfileDB.created_at.desc()).all()
+    return profiles
+
+@app.post("/api/v1/linkedin/crawl")
+def trigger_linkedin_icp_crawl(db: Session = Depends(get_db)):
+    """
+    Triggers live LinkedIn Profile Finder crawl pass & MX email verification.
+    """
+    result = crawl_linkedin_icp_profiles(db)
+    return result
+
+@app.patch("/api/v1/linkedin/profiles/{profile_id}")
+def update_linkedin_profile(profile_id: int, payload: LinkedInProfileUpdate, db: Session = Depends(get_db)):
+    """
+    Updates status lifecycle (NEW -> IN_OUTREACH -> QUALIFIED -> DEMO_BOOKED -> WON/LOST),
+    outreach fields, notes, and requirement information.
+    """
+    profile = db.query(LinkedInProfileDB).filter(LinkedInProfileDB.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="LinkedIn profile record not found")
+    
+    if payload.status_lifecycle is not None:
+        profile.status_lifecycle = payload.status_lifecycle
+    if payload.connection_sent is not None:
+        profile.connection_sent = payload.connection_sent
+    if payload.connection_accepted is not None:
+        profile.connection_accepted = payload.connection_accepted
+    if payload.message_sent is not None:
+        profile.message_sent = payload.message_sent
+    if payload.followup_date is not None:
+        profile.followup_date = payload.followup_date
+    if payload.notes is not None:
+        profile.notes = payload.notes
+    if payload.requirement_information is not None:
+        profile.requirement_information = payload.requirement_information
+
+    db.commit()
+    db.refresh(profile)
+    return profile
 
 @app.post("/api/v1/crm/enrich")
 async def trigger_alep_enrichment(db: Session = Depends(get_db)):

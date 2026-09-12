@@ -61,6 +61,14 @@ def init_db():
 # Auto-initialize DB tables & migrations on startup
 init_db()
 
+try:
+    _db = SessionLocal()
+    from app.linkedin_crawler import seed_linkedin_icp_profiles
+    seed_linkedin_icp_profiles(_db)
+    _db.close()
+except Exception:
+    pass
+
 def get_db():
     db = SessionLocal()
     try:

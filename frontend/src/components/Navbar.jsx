@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Shield, ArrowRight, LayoutDashboard, Radio, Bell } from 'lucide-react';
+import { Activity, Shield, ArrowRight, LayoutDashboard, Radio, Bell, Linkedin } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -101,6 +101,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
               {unreadCount}
             </span>
           )}
+        </button>
+        <button 
+          onClick={() => setActiveTab('linkedin')} 
+          className={`hover:text-white flex items-center gap-1.5 transition py-1 ${activeTab === 'linkedin' ? 'text-blue-400 font-semibold' : ''}`}
+        >
+          <Linkedin className="w-4 h-4 text-blue-400" />
+          <span>LinkedIn</span>
         </button>
         <button 
           onClick={() => setActiveTab('telemetry')} 
