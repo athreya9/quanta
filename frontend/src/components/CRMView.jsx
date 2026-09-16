@@ -46,60 +46,10 @@ export default function CRMView() {
         throw new Error('Failed to fetch leads from QUANTA CRM');
       }
     } catch (err) {
-      setError(err.message);
-      setLeads([
-        {
-          id: 1,
-          name: "Alexandre Dubois",
-          email: "alexandre@vertexai.io",
-          company: "Vertex AI Labs",
-          role: "Chief Technology Officer (CTO)",
-          website: "https://vertexai.io",
-          country: "United States",
-          phone: "+1 (555) 892-4100",
-          problem_statement: "HIGH-VALUE OUTSOURCING INTENT on vertexai.io: Client actively seeking agency/contractor partner for 'Custom AI Agent System Development' (Budget: $25,000 - $50,000 | Source: Reddit r/forhire & Upwork RSS).",
-          struggle: "HIGH-VALUE OUTSOURCING INTENT on vertexai.io: Client actively seeking agency/contractor partner for 'Custom AI Agent System Development' (Budget: $25,000 - $50,000 | Source: Reddit r/forhire & Upwork RSS).",
-          ip_address: "198.51.100.42",
-          geo_location: "San Francisco, United States",
-          intent_score: 98.0,
-          status: "OUTREACH_READY",
-          demo_sample: false,
-          enriched_email: "alexandre@vertexai.io",
-          enriched_phone: "+1 (555) 892-4100",
-          enriched_role: "Chief Technology Officer (CTO)",
-          enriched_linkedin: "https://linkedin.com/company/vertexai",
-          enriched_company_size: "50–250 employees",
-          enriched_tech_stack: '["HubSpot CRM","Google Analytics 4","Segment CDP","Stripe Payments"]',
-          enriched_hiring_signals: '["Active RFP: Custom AI Agent System Development ($25,000 - $50,000)"]',
-          enriched_funding_signals: "Series A/B Funded ($15M)",
-          enrichment_status: "ENRICHED",
-          outreach_ready: true,
-          buyer_persona: "Chief Technology Officer (CTO)",
-          outreach_status: "UNREAD",
-          intent_quality: "VERIFIED REAL",
-          lead_age: "10m",
-          unread_intent: true,
-          outsourcing_intent_metadata: JSON.stringify({
-            project_name: "Custom AI Agent System Development",
-            estimated_budget: "$25,000 - $50,000",
-            source_feed: "Reddit r/forhire & Upwork RSS",
-            trigger_keyword: "Need an AI engineer",
-            proposal_status: "PROPOSAL_READY"
-          }),
-          outreach_playbook: JSON.stringify({
-            subject_line: "Proposal: Custom AI Agent System Development for Vertex AI Labs",
-            pain_hook: "Noticed Vertex AI Labs is actively seeking agency/contractor support for Custom AI Agent System Development (Budget: $25,000 - $50,000).",
-            cold_email_body: "Hi Alexandre,\n\nI saw that Vertex AI Labs is actively looking for an engineering partner for Custom AI Agent System Development.\n\nQUANTA's real-time intent crawler flagged your outsourcing requirements across public project boards. Our engineering team specializes in building production-grade B2B SaaS architectures with zero technical debt.\n\nWould you be open to reviewing our 1-page agency proposal and case studies for Vertex AI Labs this week?\n\nBest regards,\nThe QUANTA Engineering Team\nhttps://quanta.virtusol.com",
-            phone_call_script: "Hi Alexandre, calling from QUANTA. Saw your open project scope for Custom AI Agent System Development ($25,000 - $50,000). Are you still accepting agency proposals?",
-            target_persona: "Chief Technology Officer (CTO)",
-            linkedin_connection_request: "Hi Alexandre, saw Vertex AI Labs's open scope for Custom AI Agent System Development. We run a high-throughput engineering team and would love to connect!",
-            linkedin_followup_message: "Thanks for connecting, Alexandre! Quick follow-up re: Vertex AI Labs's Custom AI Agent System Development scope. We have ready-to-deploy modules for this exact stack.",
-            linkedin_pitch_message: "Alexandre, if you're still evaluating outsourcing partners, we can deliver the MVP in < 30 days with full ownership of code.",
-            linkedin_cta_message: "Here is a 2-minute link to our architecture stack and client outcomes: https://quanta.virtusol.com"
-          }),
-          created_at: new Date().toISOString()
-        }
-      ]);
+      // No fake fallback data - if the API can't be reached, show that
+      // honestly instead of rendering a fabricated lead.
+      setError(err.message || 'Failed to reach QUANTA API');
+      setLeads([]);
     } finally {
       setLoading(false);
     }
@@ -246,7 +196,7 @@ export default function CRMView() {
             </span>
           </div>
           <p className="text-sm text-slate-300">
-            QEIC Open-Source Crawler, Outsourcing Intent Feeds (Upwork/Reddit/RFPs), ALEP Engine, and LinkedIn Sequences.
+            Real inbound leads, real public job-board signals (Greenhouse/Lever), and real Reddit/Upwork outsourcing posts. No fabricated contacts.
           </p>
         </div>
 
@@ -500,7 +450,7 @@ export default function CRMView() {
                         Score {lead.intent_score}
                       </span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        {lead.intent_quality || 'VERIFIED REAL'}
+                        {lead.intent_quality || 'UNVERIFIED'}
                       </span>
                     </div>
                   </td>
@@ -572,7 +522,7 @@ export default function CRMView() {
                       <h3 className="text-base font-bold text-white">{lead.name}</h3>
                       <span className="badge-gold text-[10px]">Intent Score: {lead.intent_score}/100</span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                        {lead.intent_quality || 'VERIFIED REAL'}
+                        {lead.intent_quality || 'UNVERIFIED'}
                       </span>
                       {lead.outreach_ready && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-pink-500/20 text-pink-300 border border-pink-500/40 flex items-center gap-1">
@@ -685,7 +635,7 @@ export default function CRMView() {
                           <div>• Verified Contact Deliverability: <span className="text-emerald-400 font-bold">+5 pts</span></div>
                           <div>• High-Intent Problem Depth: <span className="text-emerald-400 font-bold">+6 pts</span></div>
                           <div className="pt-1 border-t border-slate-800 text-amber-300 font-bold">
-                            Total Score: {lead.intent_score}/100 ({lead.intent_quality || 'VERIFIED REAL'})
+                            Total Score: {lead.intent_score}/100 ({lead.intent_quality || 'UNVERIFIED'})
                           </div>
                         </div>
                       </div>
@@ -701,9 +651,9 @@ export default function CRMView() {
                           buyer_persona: lead.buyer_persona || lead.role,
                           verified_email: lead.enriched_email || lead.email,
                           verified_phone: lead.enriched_phone || lead.phone,
-                          signal_source: lead.signal_source || 'qeic_crawler',
+                          signal_source: lead.signal_source || 'website_form',
                           intent_score: lead.intent_score,
-                          intent_quality: lead.intent_quality || 'VERIFIED REAL',
+                          intent_quality: lead.intent_quality || 'UNVERIFIED',
                           lead_age: lead.lead_age || '10m',
                           geo_location: lead.geo_location,
                           ip_address: lead.ip_address,

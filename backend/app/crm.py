@@ -61,14 +61,6 @@ def init_db():
 # Auto-initialize DB tables & migrations on startup
 init_db()
 
-try:
-    _db = SessionLocal()
-    from app.linkedin_crawler import seed_linkedin_icp_profiles
-    seed_linkedin_icp_profiles(_db)
-    _db.close()
-except Exception:
-    pass
-
 def get_db():
     db = SessionLocal()
     try:
@@ -94,19 +86,26 @@ async def resolve_ip_geo(ip: str) -> str:
     return "Global IP (Resolved)"
 
 def calculate_intent_score(lead: LeadCreate) -> float:
-    """Calculate lead intent score (70–99) based on role, company size indicators, and problem text."""
-    score = 72.0
+    """
+    Calculate lead intent score (30-99) based on what the visitor actually
+    submitted - role seniority, whether they gave a website/phone, and how
+    much detail they gave in their problem statement. No artificial floor:
+    a bare-minimum submission scores low, not "at least 70".
+    """
+    score = 30.0
     role_lower = (lead.role or "").lower()
     if any(title in role_lower for title in ["vp", "head", "director", "cmo", "cro", "ceo", "founder", "lead"]):
-        score += 12.0
+        score += 20.0
     if lead.website and len(lead.website) > 4:
-        score += 4.0
+        score += 10.0
     if lead.phone and len(lead.phone) > 5:
-        score += 5.0
+        score += 10.0
     problem_text = lead.problem_statement or lead.struggle or ""
     if problem_text and len(problem_text) > 15:
-        score += 6.0
-    return min(99.0, max(70.0, round(score, 1)))
+        score += 15.0
+    if problem_text and len(problem_text) > 60:
+        score += 4.0
+    return min(99.0, max(30.0, round(score, 1)))
 
 async def create_crm_lead(db: Session, lead_in: LeadCreate, ip_address: str, user_agent: str) -> LeadDB:
     geo_location = await resolve_ip_geo(ip_address)

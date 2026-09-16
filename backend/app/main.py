@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 from typing import Optional
 from fastapi import FastAPI, Request, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +12,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate
-from app.linkedin_crawler import crawl_linkedin_icp_profiles, seed_linkedin_icp_profiles, verify_linkedin_url
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate
+from app.linkedin_crawler import crawl_linkedin_icp_profiles, add_linkedin_profile, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
 from app.alerts import send_slack_alert
@@ -60,13 +61,14 @@ def health_check():
         "database": "SQLite / PostgreSQL Ready",
         "slack_alert_configured": bool(SLACK_WEBHOOK_URL),
         "intent_mode": INTENT_MODE,
+        "data_policy": "No synthetic or fabricated records. Signals/leads are only stored when sourced from a real public API, a real visitor submission, or manually verified data.",
         "deduplication_engine": "30-Minute Signal Window Active",
-        "scoring_engine": "8-Factor Behavioral Scoring Active",
-        "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running)",
-        "autonomous_intent_crawler": "Active (QEIC 24/7 Multi-Source Engine Running)",
-        "outsourcing_intent_engine": "Active (Upwork RSS, SAM.gov RFPs, Reddit, GitHub Bounties Engine Running)",
-        "telemetry_stream": "Active (Real-time ring buffer online)",
-        "timestamp": os.popen("date -u").read().strip()
+        "scoring_engine": "8-Factor Behavioral Scoring Active (0-99, no artificial floor)",
+        "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running; requires HUNTER_API_KEY/CLEARBIT_API_KEY to produce enrichment, otherwise reports NO_EXTERNAL_DATA_AVAILABLE)",
+        "autonomous_intent_crawler": "Active (QEIC 10-Minute Cycle - polls real public Greenhouse/Lever job boards only)",
+        "outsourcing_intent_engine": "Active (Reddit r/forhire + Upwork public RSS only)",
+        "telemetry_stream": "Active (Real-time ring buffer, starts empty)",
+        "timestamp": datetime.datetime.utcnow().strftime("%a %b %d %H:%M:%S UTC %Y")
     }
 
 @app.get("/api/v1/telemetry/logs")
@@ -166,8 +168,6 @@ async def register_lead(
         
     return db_lead
 
-import datetime
-
 def compute_relative_lead_age(created_at: datetime.datetime) -> str:
     """Calculates human-readable relative age (e.g., '10m', '2h', '1d', '3d')."""
     if not created_at:
@@ -239,14 +239,22 @@ def update_lead_outreach_status(lead_id: int, new_status: str, db: Session = Dep
 @app.get("/api/v1/linkedin/profiles", response_model=list[LinkedInProfileResponse])
 def get_linkedin_icp_profiles(db: Session = Depends(get_db)):
     """
-    Returns all public ICP-matched LinkedIn profiles from quanta_crm.db under linkedin_profiles table.
-    Enforces the 22 user-specified ICP schema fields.
+    Returns all LinkedIn profiles in the ICP tracker. There is no synthetic
+    seed data - this list is empty until a real profile is added via
+    POST /api/v1/linkedin/profiles.
     """
     profiles = db.query(LinkedInProfileDB).order_by(LinkedInProfileDB.created_at.desc()).all()
-    if len(profiles) == 0:
-        seed_linkedin_icp_profiles(db)
-        profiles = db.query(LinkedInProfileDB).order_by(LinkedInProfileDB.created_at.desc()).all()
     return profiles
+
+@app.post("/api/v1/linkedin/profiles", response_model=LinkedInProfileResponse, status_code=status.HTTP_201_CREATED)
+def create_linkedin_icp_profile(payload: LinkedInProfileCreate, db: Session = Depends(get_db)):
+    """
+    Adds a real, manually-sourced LinkedIn profile to the ICP tracker. The
+    profile URL is verified live (HTTP check) before being saved. No email or
+    activity history is fabricated - only what's actually supplied is stored.
+    """
+    profile = add_linkedin_profile(db, payload.model_dump(exclude_none=True))
+    return profile
 
 @app.post("/api/v1/linkedin/crawl")
 def trigger_linkedin_icp_crawl(db: Session = Depends(get_db)):
@@ -368,7 +376,7 @@ def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_d
                 company=ext.company or f"Domain ({ext.domain})",
                 domain=ext.domain,
                 event_type=ext.event_type,
-                description=enrichment.get("problem_statement") or f"Active autonomous intent intercept on {ext.domain}.",
+                description=enrichment.get("problem_statement") or f"No problem statement captured for {ext.domain}.",
                 signal_text=f"Extension signal capture on {ext.domain}",
                 source_url=ext.url or f"https://{ext.domain}",
                 detected_at="Just now",
@@ -376,14 +384,14 @@ def get_intent_signals(domain: Optional[str] = None, db: Session = Depends(get_d
                 intent_score=ext.intent_score,
                 category=ext.event_type,
                 source=ext.source or "chrome_extension",
-                location=ext.geo_location or "Real Telemetry",
-                geo_location=ext.geo_location or "Real Telemetry",
-                action_playbook="Auto-dispatch SDR & Log Signal",
+                location=ext.geo_location,
+                geo_location=ext.geo_location,
+                action_playbook=None,
                 demo_sample=ext.demo_sample or False,
-                tech_stack_signals=enrichment.get("tech_stack_signals", ["QUANTA Webhook API", "Wappalyzer Detection"]),
-                hiring_signals=enrichment.get("hiring_signals", ["Senior SDR Lead (Greenhouse)", "RevOps Mgr (LinkedIn)"]),
-                pricing_page_behavior=enrichment.get("pricing_page_behavior", "Multiple HQ IPs on pricing table"),
-                funding_signals=enrichment.get("funding_signals", "Growth Round Raised")
+                tech_stack_signals=enrichment.get("tech_stack_signals"),
+                hiring_signals=enrichment.get("hiring_signals") or (enrichment.get("hiring_titles") if enrichment.get("hiring_titles") else None),
+                pricing_page_behavior=enrichment.get("pricing_page_behavior"),
+                funding_signals=enrichment.get("funding_signals")
             )
         )
 
@@ -402,11 +410,16 @@ async def extension_ingest(
     db: Session = Depends(get_db)
 ):
     """
-    Ingests Chrome extension signals directly into extension_signals table in quanta_crm.db
-    with 30-minute deduplication, 8-factor behavioral intent scoring, and Slack alerts.
+    Ingests a real Chrome extension telemetry event into the extension_signals
+    table (30-minute deduplication, 8-factor scoring, Slack alert if it crosses
+    threshold). This does NOT create a CRM "lead" - silent browser telemetry
+    never comes with a real contact identity, so fabricating a placeholder
+    name/email for it would be exactly the kind of fake record this system is
+    built to avoid. Real leads only come from a real visitor filling out the
+    contact form (POST /api/v1/leads) or a manually verified LinkedIn profile.
     """
     clean_domain = payload.domain.replace("www.", "").lower().strip()
-    
+
     # 30-Minute Deduplication Check
     is_dup = is_duplicate_signal(clean_domain, payload.event_type)
 
@@ -420,9 +433,8 @@ async def extension_ingest(
         "browser_fingerprint": payload.browser_fingerprint
     })
 
-    # Update payload with calculated intent score and enrichment metadata
     payload.intent_score = processed["intent_score"]
-    
+
     db_signal = ExtensionSignalDB(
         domain=processed["domain"],
         url=processed["url"],
@@ -430,7 +442,7 @@ async def extension_ingest(
         intent_score=processed["intent_score"],
         source=processed["source"],
         company=processed["company"],
-        geo_location=payload.geo_location or "Real Telemetry",
+        geo_location=payload.geo_location,
         browser_fingerprint=payload.browser_fingerprint or request.headers.get("User-Agent"),
         enrichment_metadata=json.dumps(processed),
         demo_sample=payload.demo_sample or False
@@ -438,25 +450,6 @@ async def extension_ingest(
     db.add(db_signal)
     db.commit()
     db.refresh(db_signal)
-
-    # Record into leads table with real data-backed problem statement
-    client_ip = request.headers.get("X-Forwarded-For") or request.client.host
-    if "," in client_ip:
-        client_ip = client_ip.split(",")[0].strip()
-        
-    lead_data = LeadCreate(
-        name="Autonomous Intent Intercept",
-        email=f"contact@{clean_domain}",
-        company=payload.company or f"Domain ({clean_domain})",
-        role="Active Prospect",
-        website=payload.url or f"https://{clean_domain}",
-        country="Extension Stream",
-        phone=None,
-        problem_statement=processed["problem_statement"],
-        struggle=processed["problem_statement"],
-        demo_sample=payload.demo_sample or False
-    )
-    await create_crm_lead(db, lead_data, client_ip, request.headers.get("User-Agent", "QUANTA Chrome Extension"))
 
     # Only fire Slack alert if real signal (demo_sample = False), high intent (>=90), and NOT a 30-min duplicate!
     slack_dispatched = False
@@ -520,7 +513,6 @@ async def external_ingest_signal(
         domain=domain,
         company=company or f"Domain ({domain})",
         event_type=event_type,
-        intent_score=94,
         source="backend_ingestion",
         demo_sample=False
     )

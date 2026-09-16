@@ -12,9 +12,20 @@ export default function LinkedInView() {
   const [error, setError] = useState(null);
 
   // LinkedIn URL Checker Tool State
-  const [checkerUrl, setCheckerUrl] = useState('https://www.linkedin.com/in/satyanadella');
+  const [checkerUrl, setCheckerUrl] = useState('');
   const [checkingUrl, setCheckingUrl] = useState(false);
   const [checkerResult, setCheckerResult] = useState(null);
+
+  // Add Real Profile Form State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addingProfile, setAddingProfile] = useState(false);
+  const [addError, setAddError] = useState(null);
+  const emptyForm = {
+    first_name: '', last_name: '', current_job_title: '', company: '',
+    linkedin_profile_url: '', country: '', industry: '', company_website: '',
+    verified_email: '', notes: ''
+  };
+  const [newProfile, setNewProfile] = useState(emptyForm);
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -73,6 +84,32 @@ export default function LinkedInView() {
     }
   };
 
+  const addProfile = async (e) => {
+    e?.preventDefault();
+    setAddingProfile(true);
+    setAddError(null);
+    try {
+      const res = await fetch('/api/v1/linkedin/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProfile)
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setProfiles(prev => [created, ...prev]);
+        setNewProfile(emptyForm);
+        setShowAddForm(false);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setAddError(err.detail || 'Failed to add profile');
+      }
+    } catch (err) {
+      setAddError(err.message);
+    } finally {
+      setAddingProfile(false);
+    }
+  };
+
   const updateProfileStatus = async (id, updatePayload) => {
     try {
       const res = await fetch(`/api/v1/linkedin/profiles/${id}`, {
@@ -111,6 +148,7 @@ export default function LinkedInView() {
 
   const p1Count = profiles.filter(p => p.priority === 'P1').length;
   const verifiedCount = profiles.filter(p => p.linkedin_url_verification_status === 'VERIFIED_LIVE').length;
+  const mxFoundCount = profiles.filter(p => p.mx_verification_status === 'MX_RECORD_FOUND').length;
 
   return (
     <div className="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -128,18 +166,26 @@ export default function LinkedInView() {
             </span>
           </div>
           <p className="text-sm text-slate-300">
-            Crawls public LinkedIn profiles, verifies HTTP 200 status, generates MX-verified emails, and tracks ICP lifecycle. Synthetic profiles forbidden.
+            Tracks real, manually-added LinkedIn profiles and re-verifies their public HTTP status. No synthetic or auto-generated profiles - every entry here was added by a person with a real URL.
           </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={triggerCrawl}
-            disabled={crawling}
+            onClick={() => setShowAddForm(v => !v)}
             className="btn-primary text-xs py-2 px-3.5 flex items-center gap-2"
           >
+            <User className="w-3.5 h-3.5" />
+            <span>{showAddForm ? 'Cancel' : 'Add Real Profile'}</span>
+          </button>
+
+          <button
+            onClick={triggerCrawl}
+            disabled={crawling}
+            className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-2"
+          >
             <Sparkles className={`w-3.5 h-3.5 ${crawling ? 'animate-spin' : ''}`} />
-            <span>{crawling ? 'Crawling LinkedIn...' : 'Crawl Public Profiles'}</span>
+            <span>{crawling ? 'Re-verifying...' : 'Re-verify All URLs'}</span>
           </button>
 
           <button
@@ -151,6 +197,28 @@ export default function LinkedInView() {
           </button>
         </div>
       </div>
+
+      {showAddForm && (
+        <div className="card-dark p-5 border-blue-500/30 mb-8 bg-slate-950/80">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3">Add a Real Profile</h2>
+          <form onSubmit={addProfile} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input required placeholder="First name" value={newProfile.first_name} onChange={e => setNewProfile({ ...newProfile, first_name: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input required placeholder="Last name" value={newProfile.last_name} onChange={e => setNewProfile({ ...newProfile, last_name: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input required placeholder="Current job title" value={newProfile.current_job_title} onChange={e => setNewProfile({ ...newProfile, current_job_title: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input required placeholder="Company" value={newProfile.company} onChange={e => setNewProfile({ ...newProfile, company: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input required type="url" placeholder="LinkedIn profile URL (will be verified live)" value={newProfile.linkedin_profile_url} onChange={e => setNewProfile({ ...newProfile, linkedin_profile_url: e.target.value })} className="sm:col-span-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono" />
+            <input placeholder="Country" value={newProfile.country} onChange={e => setNewProfile({ ...newProfile, country: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input placeholder="Industry" value={newProfile.industry} onChange={e => setNewProfile({ ...newProfile, industry: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input placeholder="Company website" value={newProfile.company_website} onChange={e => setNewProfile({ ...newProfile, company_website: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <input placeholder="Email (optional - only checked for MX, not guessed)" value={newProfile.verified_email} onChange={e => setNewProfile({ ...newProfile, verified_email: e.target.value })} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+            <textarea placeholder="Notes" value={newProfile.notes} onChange={e => setNewProfile({ ...newProfile, notes: e.target.value })} className="sm:col-span-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" rows={2} />
+            {addError && <div className="sm:col-span-2 text-rose-400 text-xs">{addError}</div>}
+            <button type="submit" disabled={addingProfile} className="sm:col-span-2 btn-primary text-xs py-2 px-3.5">
+              {addingProfile ? 'Verifying & saving...' : 'Verify URL & Save Profile'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* 🛠️ LinkedIn URL Checker Tool Module */}
       <div className="card-dark p-5 border-blue-500/30 mb-8 bg-slate-950/80">
@@ -166,7 +234,7 @@ export default function LinkedInView() {
             type="url"
             value={checkerUrl}
             onChange={(e) => setCheckerUrl(e.target.value)}
-            placeholder="Paste LinkedIn profile URL (e.g. https://www.linkedin.com/in/satyanadella)"
+            placeholder="Paste a LinkedIn profile URL to check"
             className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
             required
           />
@@ -190,18 +258,20 @@ export default function LinkedInView() {
         </form>
 
         {checkerResult && (
-          <div className={`p-3.5 rounded-xl border text-xs font-mono transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${checkerResult.valid ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' : 'bg-rose-950/40 border-rose-500/40 text-rose-200'}`}>
+          <div className={`p-3.5 rounded-xl border text-xs font-mono transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${checkerResult.valid === true ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' : checkerResult.valid === false ? 'bg-rose-950/40 border-rose-500/40 text-rose-200' : 'bg-amber-950/40 border-amber-500/40 text-amber-200'}`}>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                {checkerResult.valid ? (
+                {checkerResult.valid === true ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : (
+                ) : checkerResult.valid === false ? (
                   <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                 )}
                 <span className="font-bold text-white text-xs">
-                  {checkerResult.valid ? 'VALID PUBLIC LINKEDIN PROFILE (HTTP 200 OK)' : 'REJECTED LINKEDIN PROFILE'}
+                  {checkerResult.valid === true ? 'LIVE PUBLIC LINKEDIN PROFILE (HTTP 200)' : checkerResult.valid === false ? 'PROFILE NOT FOUND / INVALID' : 'COULD NOT VERIFY (CHECK MANUALLY)'}
                 </span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${checkerResult.valid ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${checkerResult.valid === true ? 'bg-emerald-500/20 text-emerald-300' : checkerResult.valid === false ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>
                   HTTP {checkerResult.http_status}
                 </span>
               </div>
@@ -260,7 +330,7 @@ export default function LinkedInView() {
             </div>
             <div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Live URL Verification</div>
-              <div className="text-xl font-extrabold text-emerald-400">100% VERIFIED_LIVE</div>
+              <div className="text-xl font-extrabold text-emerald-400">{profiles.length ? `${Math.round((verifiedCount / profiles.length) * 100)}% VERIFIED_LIVE` : 'No profiles yet'}</div>
             </div>
           </div>
         </div>
@@ -271,8 +341,8 @@ export default function LinkedInView() {
               <Briefcase className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">MX Email Verified</div>
-              <div className="text-xl font-extrabold text-purple-400">100% Deliverable</div>
+              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">MX Record Found</div>
+              <div className="text-xl font-extrabold text-purple-400">{mxFoundCount} of {profiles.length}</div>
             </div>
           </div>
         </div>
@@ -321,11 +391,11 @@ export default function LinkedInView() {
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white flex items-center gap-1">
-                        <Linkedin className="w-3 h-3" /> VERIFIED_LIVE (HTTP 200)
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black text-white flex items-center gap-1 ${p.linkedin_url_verification_status === 'VERIFIED_LIVE' ? 'bg-emerald-600' : p.linkedin_url_verification_status === 'VERIFICATION_FAILED' ? 'bg-rose-600' : 'bg-slate-600'}`}>
+                        <Linkedin className="w-3 h-3" /> {p.linkedin_url_verification_status || 'UNVERIFIED'}
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                        ICP Fit: {p.icp_fit} ({p.priority})
+                        ICP Fit: {p.icp_fit || 'UNSCORED'} ({p.priority || 'UNSET'})
                       </span>
                       <h3 className="text-base font-bold text-white">{p.full_name}</h3>
                     </div>

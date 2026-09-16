@@ -48,11 +48,11 @@ class LeadDB(Base):
     outreach_ready = Column(Boolean, default=False)
     outreach_playbook = Column(Text, nullable=True)
     buyer_persona = Column(String(100), nullable=True)
-    signal_source = Column(String(100), default="qeic_crawler")
+    signal_source = Column(String(100), default="website_form")
 
     # STEP 10: Real Data Activation & CRM Enhancements
     outreach_status = Column(String(50), default="UNREAD")
-    intent_quality = Column(String(50), default="VERIFIED REAL")
+    intent_quality = Column(String(50), default="UNVERIFIED")
     lead_owner = Column(String(100), default="Unassigned (Auto-Routed)")
     lead_notes = Column(Text, nullable=True)
     activity_log = Column(Text, nullable=True)
@@ -71,7 +71,7 @@ class ExtensionSignalDB(Base):
     domain = Column(String(255), nullable=False, index=True)
     url = Column(Text, nullable=True)
     event_type = Column(String(100), default="CHROME_EXTENSION_INTERCEPT")
-    intent_score = Column(Integer, default=92)
+    intent_score = Column(Integer, default=20)
     source = Column(String(50), default="chrome_extension")
     company = Column(String(255), nullable=True)
     geo_location = Column(String(255), nullable=True)
@@ -99,9 +99,9 @@ class LinkedInProfileDB(Base):
     company_website = Column(String(255), nullable=True)
     approximate_company_size = Column(String(100), nullable=True)
     linkedin_profile_url = Column(String(500), nullable=False)
-    linkedin_url_verification_status = Column(String(50), default="VERIFIED_LIVE")
-    icp_fit = Column(String(20), default="HIGH")  # HIGH, MEDIUM, LOW
-    priority = Column(String(10), default="P1")     # P1, P2, P3
+    linkedin_url_verification_status = Column(String(50), default="UNVERIFIED")
+    icp_fit = Column(String(20), default="UNSCORED")  # HIGH, MEDIUM, LOW, UNSCORED
+    priority = Column(String(10), default="UNSET")     # P1, P2, P3, UNSET
     industry_fit = Column(Text, nullable=True)
     geography_fit = Column(Text, nullable=True)
     seniority_fit = Column(Text, nullable=True)
@@ -116,7 +116,7 @@ class LinkedInProfileDB(Base):
     notes = Column(Text, nullable=True)
     requirement_information = Column(Text, nullable=True)
     verified_email = Column(String(255), nullable=True)
-    mx_verification_status = Column(String(50), default="MX_VERIFIED_DELIVERABLE")
+    mx_verification_status = Column(String(50), default="NOT_PROVIDED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class LeadCreate(BaseModel):
@@ -164,11 +164,11 @@ class LeadResponse(BaseModel):
     outreach_ready: Optional[bool] = False
     outreach_playbook: Optional[str] = None
     buyer_persona: Optional[str] = None
-    signal_source: Optional[str] = "qeic_crawler"
+    signal_source: Optional[str] = "website_form"
 
     # STEP 10 Real Data & CRM Enhancements Output Fields
     outreach_status: Optional[str] = "UNREAD"
-    intent_quality: Optional[str] = "VERIFIED REAL"
+    intent_quality: Optional[str] = "UNVERIFIED"
     lead_owner: Optional[str] = "Unassigned (Auto-Routed)"
     lead_notes: Optional[str] = None
     activity_log: Optional[str] = None
@@ -261,11 +261,34 @@ class LinkedInProfileResponse(BaseModel):
     notes: Optional[str] = None
     requirement_information: Optional[str] = None
     verified_email: Optional[str] = None
-    mx_verification_status: Optional[str] = "MX_VERIFIED_DELIVERABLE"
+    mx_verification_status: Optional[str] = "NOT_PROVIDED"
     created_at: datetime.datetime
 
     class Config:
         from_attributes = True
+
+class LinkedInProfileCreate(BaseModel):
+    first_name: str
+    last_name: str
+    full_name: Optional[str] = None
+    current_job_title: str
+    company: str
+    country: Optional[str] = None
+    industry: Optional[str] = None
+    company_website: Optional[str] = None
+    approximate_company_size: Optional[str] = None
+    linkedin_profile_url: str
+    icp_fit: Optional[str] = None
+    priority: Optional[str] = None
+    industry_fit: Optional[str] = None
+    geography_fit: Optional[str] = None
+    seniority_fit: Optional[str] = None
+    direct_material_procurement_fit: Optional[str] = None
+    supplier_discovery_relevance: Optional[str] = None
+    followup_date: Optional[str] = None
+    notes: Optional[str] = None
+    requirement_information: Optional[str] = None
+    verified_email: Optional[str] = None
 
 class LinkedInProfileUpdate(BaseModel):
     status_lifecycle: Optional[str] = None

@@ -56,22 +56,5 @@ def get_recent_telemetry(limit: int = 100, tool_filter: Optional[str] = None) ->
 
     return events[:limit]
 
-# Seed initial telemetry log entries for system startup
-log_telemetry_event(
-    tool_name="QEIC Autonomous Intent Crawler",
-    status="ACTIVE",
-    raw_payload={"targets_count": 25, "interval": "10 minutes"},
-    raw_output={"status": "running", "active_crawlers": ["Greenhouse", "Lever", "Workable", "Crunchbase RSS"]}
-)
-log_telemetry_event(
-    tool_name="ALEP Background Enrichment Engine",
-    status="ACTIVE",
-    raw_payload={"scan_interval": "5 minutes", "providers": ["Hunter", "Clearbit", "Apollo", "DNS MX Verification"]},
-    raw_output={"status": "running", "un_enriched_queue": 0}
-)
-log_telemetry_event(
-    tool_name="30-Min Signal Deduplication Engine",
-    status="ACTIVE",
-    raw_payload={"dedup_window": "30 minutes"},
-    raw_output={"status": "monitoring", "suppressed_signals": 12}
-)
+# No fake seed events - the telemetry buffer starts empty and only ever
+# contains events that were actually logged by real engine activity.

@@ -22,48 +22,10 @@ export default function TelemetryView() {
         throw new Error('Failed to fetch telemetry stream');
       }
     } catch (err) {
-      setError(err.message);
-      // Fallback telemetry logs for offline view
-      setTelemetryData({
-        status: 'active',
-        total_events: 4,
-        events: [
-          {
-            id: 'tel_101',
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-            tool_name: 'QEIC Autonomous Intent Crawler',
-            status: 'COMPLETED',
-            raw_payload: { targets_count: 25, interval: '10 minutes' },
-            raw_output: { status: 'completed', scanned_targets: 25, new_signals_ingested: 17, new_outreach_leads_generated: 17 },
-            raw_ingestion: { signals: 17, leads: 17 }
-          },
-          {
-            id: 'tel_102',
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-            tool_name: 'Outsourcing Crawler',
-            status: 'COMPLETED',
-            raw_payload: { sources: ['Reddit r/forhire RSS', 'Upwork RSS', 'SAM.gov RFP', 'Clutch.co'] },
-            raw_output: { status: 'completed', new_outsourcing_signals: 5, new_outsourcing_leads: 5 },
-            raw_ingestion: { outsourcing_rfps: 5 }
-          },
-          {
-            id: 'tel_103',
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-            tool_name: 'Deduplication Engine',
-            status: 'WARNING',
-            raw_payload: { domain: 'healthcore.io', event_type: 'OUTSOURCING_INTENT', time_since_last_sec: 1374 },
-            raw_output: { suppressed: true, action: 'Slack alert and lead duplication blocked' }
-          },
-          {
-            id: 'tel_104',
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-            tool_name: 'Slack Alerts Engine',
-            status: 'COMPLETED',
-            raw_payload: { company: 'Clari Revenue Platform', event_type: 'PRICING_PAGE_SURGE', intent_score: 99 },
-            raw_output: { slack_status: 200, message: 'Webhook alert delivered for Clari Revenue Platform' }
-          }
-        ]
-      });
+      // No fake fallback events - if the API can't be reached, show that
+      // honestly instead of rendering fabricated telemetry.
+      setError(err.message || 'Failed to reach QUANTA API');
+      setTelemetryData({ status: 'unreachable', total_events: 0, events: [] });
     } finally {
       setLoading(false);
     }

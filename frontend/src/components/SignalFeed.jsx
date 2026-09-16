@@ -16,35 +16,9 @@ export default function SignalFeed() {
         setSignals(data);
       }
     } catch (err) {
-      // Fallback signal stream
-      setSignals([
-        {
-          id: 'sig_101',
-          company: 'Stripe Competitor Corp',
-          event_type: 'TECH_STACK_CHANGE',
-          category: 'TECH_STACK_CHANGE',
-          description: 'Removed legacy tracking scripts and installed custom intent webhook API on enterprise pricing path.',
-          source_url: 'https://github.com/stripe-comp/web-analytics',
-          detected_at: 'Just now',
-          timestamp: '14:22:10 UTC',
-          intent_score: 96,
-          location: 'San Francisco, CA',
-          action_playbook: 'Trigger Executive Outreach + Slack Alert #growth-leads'
-        },
-        {
-          id: 'sig_102',
-          company: 'Nexus B2B SaaS',
-          event_type: 'EXEC_HIRE',
-          category: 'EXEC_HIRE',
-          description: 'Appointed new VP of Revenue Operations (ex-Gong, ex-Salesforce) to scale GTM engine.',
-          source_url: 'https://linkedin.com/company/nexus-b2b/jobs',
-          detected_at: '5m ago',
-          timestamp: '14:17:10 UTC',
-          intent_score: 92,
-          location: 'Austin, TX',
-          action_playbook: 'Dispatch RevOps playbook via Chrome Extension'
-        }
-      ]);
+      // No fake fallback signals - show an empty stream rather than
+      // fabricated companies if the API can't be reached.
+      setSignals([]);
     } finally {
       setLoading(false);
     }
