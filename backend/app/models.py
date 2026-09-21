@@ -396,6 +396,16 @@ class LinkedInProfileUpdate(BaseModel):
     notes: Optional[str] = None
     requirement_information: Optional[str] = None
 
+class CompanySeedEntry(BaseModel):
+    domain: str  # or a full URL - normalized server-side
+    company_name: Optional[str] = None
+    industry: Optional[str] = None
+    country: Optional[str] = None
+
+class CompanySeedRequest(BaseModel):
+    companies: List[CompanySeedEntry]
+    icp_profile_id: Optional[int] = None  # if given, newly-seeded companies are scored against it immediately
+
 class CompanyResponse(BaseModel):
     id: int
     domain: str

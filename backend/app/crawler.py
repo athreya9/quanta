@@ -5,18 +5,18 @@ import datetime
 import httpx
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from app.models import ExtensionSignalDB
+from app.models import ExtensionSignalDB, CompanyDB
 from app.scoring import calculate_multi_factor_intent_score, generate_real_problem_statement
 from app.deduplication import is_duplicate_signal
 
 logger = logging.getLogger("quanta.qeic")
 
-# Watchlist of company domains whose PUBLIC job boards we poll for real hiring
-# signals. This is just a target list - no personal/contact data is attached
-# here. QUANTA does not know who the decision-maker is at these companies
-# unless a real lead comes in through the contact form or is added manually
-# to the LinkedIn ICP tracker with a verified profile.
-TARGET_CRAWL_DOMAINS = [
+# Baseline seed watchlist - kept as a working example, not the only thing
+# watched. The real watchlist (see build_crawl_target_list) is every company
+# already in the companies table, so it grows automatically as SEC EDGAR
+# discovers real companies or someone seeds real ones via
+# POST /api/v1/companies/seed - no more hardcoded 15-company ceiling.
+SEED_CRAWL_DOMAINS = [
     {"domain": "stripe.com", "company": "Stripe", "slug": "stripe"},
     {"domain": "datadoghq.com", "company": "Datadog", "slug": "datadog"},
     {"domain": "hubspot.com", "company": "HubSpot", "slug": "hubspot"},
@@ -64,19 +64,40 @@ async def fetch_open_source_lever_jobs(company_slug: str) -> List[str]:
         logger.debug(f"Lever public API crawl warning for {company_slug}: {e}")
     return []
 
-async def crawl_external_intent_sources() -> List[Dict[str, Any]]:
+def build_crawl_target_list(db: Session) -> List[Dict[str, str]]:
+    """
+    Merges the baseline seed watchlist with every company already known to
+    the system (seeded by a user or discovered by SEC EDGAR). A company with
+    no curated Greenhouse/Lever slug just gets a best-guess slug from its
+    domain - if the guess is wrong, the fetch functions below simply return
+    an empty list (already-established graceful-failure pattern), never a
+    fabricated one.
+    """
+    seen = {t["domain"]: t for t in SEED_CRAWL_DOMAINS}
+    for c in db.query(CompanyDB).all():
+        if c.domain not in seen:
+            seen[c.domain] = {
+                "domain": c.domain,
+                "company": c.company_name or c.domain,
+                "slug": c.domain.split(".")[0],
+            }
+    return list(seen.values())
+
+async def crawl_external_intent_sources(db: Session) -> List[Dict[str, Any]]:
     """
     QEIC (QUANTA External Intent Crawler) Core:
-    Polls real, public Greenhouse/Lever job board APIs for each watchlisted
-    domain. Only produces a result for a domain when real job postings were
-    actually found - no fabricated fallback numbers, no invented funding
-    rounds, no invented pricing-page telemetry (that data can only come from
-    real extension/pixel capture, see ingestion.py).
+    Polls real, public Greenhouse/Lever job board APIs for every company the
+    system currently knows about (see build_crawl_target_list). Only
+    produces a result for a domain when real job postings were actually
+    found - no fabricated fallback numbers, no invented funding rounds, no
+    invented pricing-page telemetry (that data can only come from real
+    extension/pixel capture, see ingestion.py).
     """
     crawled_signals = []
     timestamp_str = datetime.datetime.utcnow().strftime("%H:%M:%S UTC")
+    target_list = build_crawl_target_list(db)
 
-    for target in TARGET_CRAWL_DOMAINS:
+    for target in target_list:
         domain = target["domain"]
         company = target["company"]
         slug = target.get("slug", domain.split(".")[0])
@@ -128,7 +149,8 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
     profiles (linkedin_crawler.py).
     """
     logger.info("Executing QEIC public job-board intent crawl pass...")
-    signals = await crawl_external_intent_sources()
+    target_list = build_crawl_target_list(db)
+    signals = await crawl_external_intent_sources(db)
 
     new_signals_count = 0
 
@@ -170,7 +192,7 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
 
     res = {
         "status": "completed",
-        "scanned_targets": len(TARGET_CRAWL_DOMAINS),
+        "scanned_targets": len(target_list),
         "new_signals_ingested": new_signals_count,
         "new_outreach_leads_generated": 0
     }
@@ -180,7 +202,7 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
         log_telemetry_event(
             tool_name="QEIC Autonomous Intent Crawler",
             status="COMPLETED",
-            raw_payload={"targets_count": len(TARGET_CRAWL_DOMAINS)},
+            raw_payload={"targets_count": len(target_list)},
             raw_output=res
         )
     except Exception:

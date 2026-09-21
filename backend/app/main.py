@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse, CompanyICPScoreDB, CompanyICPScoreResponse, OutreachDraftResponse
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse, CompanyICPScoreDB, CompanyICPScoreResponse, OutreachDraftResponse, CompanySeedRequest
 from app.linkedin_crawler import crawl_linkedin_icp_profiles, add_linkedin_profile, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
@@ -23,7 +23,7 @@ from app.ingestion import process_telemetry_and_score
 from app.deduplication import is_duplicate_signal
 from app.lead_enrichment_worker import start_periodic_enrichment_loop, run_enrichment_worker_cycle
 from app.intent_crawler_worker import start_periodic_qeic_crawler_loop, run_qeic_crawler_cycle
-from app.companies import backfill_companies_from_existing_data
+from app.companies import backfill_companies_from_existing_data, get_or_create_company
 from app import icp as icp_module
 
 limiter = Limiter(key_func=get_remote_address)
@@ -362,6 +362,62 @@ def deactivate_icp_profile_endpoint(profile_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="ICP profile not found")
     return _serialize_icp(profile)
 
+@app.get("/api/v1/icp/{profile_id}/qualified-leads")
+def qualified_leads(profile_id: int, min_fit: str = "MEDIUM", limit: int = 20, db: Session = Depends(get_db)):
+    """
+    The one call to actually use this system day to day: every company that
+    qualifies for this project's ICP, with its fit reasoning AND a ready-to-
+    review outreach draft in the same response. Companies whose real signals
+    aren't enough to draft anything honestly show drafted=false rather than
+    being silently omitted or padded with filler - see app.outreach.
+    """
+    from app.outreach import draft_outreach_for_company
+
+    icp = icp_module.get_icp_profile(db, profile_id)
+    if not icp:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+
+    fit_rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    min_rank = fit_rank.get(min_fit.upper(), 2)
+    acceptable_fits = [f for f, r in fit_rank.items() if r >= min_rank]
+
+    scores = (
+        db.query(CompanyICPScoreDB)
+        .filter(CompanyICPScoreDB.icp_profile_id == profile_id, CompanyICPScoreDB.fit.in_(acceptable_fits))
+        .order_by(CompanyICPScoreDB.score.desc())
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for s in scores:
+        company = db.query(CompanyDB).filter(CompanyDB.id == s.company_id).first()
+        if not company:
+            continue
+        draft = draft_outreach_for_company(db, company, icp)
+        results.append({
+            "company_id": company.id,
+            "domain": company.domain,
+            "company_name": company.company_name,
+            "fit": s.fit,
+            "score": s.score,
+            "fit_reasons": json.loads(s.reasons) if s.reasons else [],
+            "drafted": draft["status"] == "DRAFT_READY",
+            "subject_line": draft.get("subject_line"),
+            "email_body": draft.get("email_body"),
+            "cited_signals": draft.get("cited_signals", []),
+            "draft_skipped_reason": draft.get("reason"),
+        })
+
+    return {
+        "icp_profile_id": profile_id,
+        "icp_profile_name": icp.name,
+        "min_fit": min_fit.upper(),
+        "total_qualified": len(results),
+        "ready_to_send_count": sum(1 for r in results if r["drafted"]),
+        "leads": results,
+    }
+
 def _serialize_icp(p) -> dict:
     return {
         "id": p.id, "name": p.name, "description": p.description, "is_active": p.is_active,
@@ -413,6 +469,71 @@ def get_company_icp_scores(company_id: int, db: Session = Depends(get_db)):
             "computed_at": r.computed_at,
         })
     return out
+
+@app.post("/api/v1/companies/seed")
+async def seed_companies(payload: CompanySeedRequest, db: Session = Depends(get_db)):
+    """
+    Bulk-adds real companies YOU already know are relevant (existing network,
+    prior research, whatever) as the fastest way to get real signal coverage
+    for a new project - QUANTA doesn't have to "discover" a company you
+    already know about. Every crawler (Greenhouse/Lever hiring, SEC EDGAR
+    funding) automatically starts watching everything in the companies table,
+    so seeding here means real ongoing monitoring starts immediately.
+
+    Companies missing an industry get one inferred from their own real
+    homepage content (app.industry_classifier) - never guessed from the
+    domain name alone, and left blank if there's not enough real evidence.
+    """
+    from app.industry_classifier import infer_industry_from_homepage
+
+    added = 0
+    already_existed = 0
+    industry_inferred = 0
+
+    from app.companies import normalize_domain
+    for entry in payload.companies:
+        norm = normalize_domain(entry.domain)
+        pre_existing = db.query(CompanyDB).filter(CompanyDB.domain == norm).first() if norm else None
+
+        company = get_or_create_company(
+            db, entry.domain,
+            company_name=entry.company_name,
+            industry=entry.industry,
+            country=entry.country,
+            source="user_seed",
+        )
+        if not company:
+            continue
+        if pre_existing:
+            already_existed += 1
+        else:
+            added += 1
+
+        if not company.industry:
+            inferred = await infer_industry_from_homepage(company.domain)
+            if inferred:
+                company.industry = inferred
+                company.updated_at = datetime.datetime.utcnow()
+                db.commit()
+                industry_inferred += 1
+
+    scored_against = None
+    if payload.icp_profile_id:
+        icp = icp_module.get_icp_profile(db, payload.icp_profile_id)
+        if icp:
+            companies = db.query(CompanyDB).all()
+            for c in companies:
+                icp_module.score_and_store(db, c, icp)
+            scored_against = icp.name
+
+    return {
+        "status": "completed",
+        "submitted": len(payload.companies),
+        "newly_added": added,
+        "already_existed": already_existed,
+        "industry_inferred_from_homepage": industry_inferred,
+        "rescored_against_icp": scored_against,
+    }
 
 @app.post("/api/v1/companies/backfill")
 def backfill_companies(db: Session = Depends(get_db)):
