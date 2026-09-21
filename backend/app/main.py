@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse
 from app.linkedin_crawler import crawl_linkedin_icp_profiles, add_linkedin_profile, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
@@ -23,6 +23,8 @@ from app.ingestion import process_telemetry_and_score
 from app.deduplication import is_duplicate_signal
 from app.lead_enrichment_worker import start_periodic_enrichment_loop, run_enrichment_worker_cycle
 from app.intent_crawler_worker import start_periodic_qeic_crawler_loop, run_qeic_crawler_cycle
+from app.companies import backfill_companies_from_existing_data
+from app import icp as icp_module
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
@@ -51,6 +53,11 @@ async def startup_event():
     # Trigger initial QEIC crawler cycle and start 10-minute 24/7 autonomous intent crawler
     asyncio.create_task(run_qeic_crawler_cycle())
     asyncio.create_task(start_periodic_qeic_crawler_loop(interval_seconds=600))
+    # SEC EDGAR Form D discovery - real, free, authoritative funding signals.
+    # Runs every 6h (not 10min) out of respect for SEC's fair-access policy.
+    from app.sec_edgar_worker import run_sec_edgar_cycle, start_periodic_sec_edgar_loop
+    asyncio.create_task(run_sec_edgar_cycle())
+    asyncio.create_task(start_periodic_sec_edgar_loop(interval_seconds=21600))
 
 @app.get("/api/v1/health")
 def health_check():
@@ -67,7 +74,10 @@ def health_check():
         "automatic_lead_enrichment_engine": "Active (5-Minute Cron Worker Running; requires HUNTER_API_KEY/CLEARBIT_API_KEY to produce enrichment, otherwise reports NO_EXTERNAL_DATA_AVAILABLE)",
         "autonomous_intent_crawler": "Active (QEIC 10-Minute Cycle - polls real public Greenhouse/Lever job boards only)",
         "outsourcing_intent_engine": "Active (Reddit r/forhire + Upwork public RSS only)",
+        "sec_edgar_discovery_engine": "Active (6-Hour Cycle - real Form D filings, domain-verified before storage, no paid API)",
         "telemetry_stream": "Active (Real-time ring buffer, starts empty)",
+        "single_source_of_truth": "companies table (dedup key: normalized root domain) - see /api/v1/companies",
+        "icp_driven": "GET/POST /api/v1/icp - discovery and scoring are unfiltered/neutral until an ICP profile is activated",
         "timestamp": datetime.datetime.utcnow().strftime("%a %b %d %H:%M:%S UTC %Y")
     }
 
@@ -305,6 +315,98 @@ def update_linkedin_profile(profile_id: int, payload: LinkedInProfileUpdate, db:
     db.commit()
     db.refresh(profile)
     return profile
+
+# ============ ICP Profiles ============
+
+@app.get("/api/v1/icp", response_model=list[ICPProfileResponse])
+def list_icp_profiles_endpoint(db: Session = Depends(get_db)):
+    """Lists all ICP (Ideal Customer Profile) definitions."""
+    profiles = icp_module.list_icp_profiles(db)
+    return [_serialize_icp(p) for p in profiles]
+
+@app.post("/api/v1/icp", response_model=ICPProfileResponse, status_code=status.HTTP_201_CREATED)
+def create_icp_profile_endpoint(payload: ICPProfileCreate, db: Session = Depends(get_db)):
+    """
+    Creates an ICP definition. This is what drives which companies discovery
+    sources bother looking at and how they're scored - set is_active=true to
+    make it the profile everything else reads.
+    """
+    profile = icp_module.create_icp_profile(db, payload.model_dump())
+    return _serialize_icp(profile)
+
+@app.post("/api/v1/icp/{profile_id}/activate", response_model=ICPProfileResponse)
+def activate_icp_profile_endpoint(profile_id: int, db: Session = Depends(get_db)):
+    profile = icp_module.activate_icp_profile(db, profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return _serialize_icp(profile)
+
+def _serialize_icp(p) -> dict:
+    return {
+        "id": p.id, "name": p.name, "is_active": p.is_active,
+        "industries": json.loads(p.industries) if p.industries else None,
+        "geographies": json.loads(p.geographies) if p.geographies else None,
+        "employee_min": p.employee_min, "employee_max": p.employee_max,
+        "target_titles": json.loads(p.target_titles) if p.target_titles else None,
+        "excluded_domains": json.loads(p.excluded_domains) if p.excluded_domains else None,
+        "signal_weights": json.loads(p.signal_weights) if p.signal_weights else None,
+        "created_at": p.created_at, "updated_at": p.updated_at,
+    }
+
+# ============ Companies (single source of truth) ============
+
+@app.get("/api/v1/companies", response_model=list[CompanyResponse])
+def list_companies(icp_fit: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
+    """
+    Lists canonical company records. Every signal/lead in the system traces
+    back to one of these - this is the de-duplicated view of "who have we
+    actually found evidence about", filterable by ICP fit (HIGH/MEDIUM/LOW/
+    UNSCORED/EXCLUDED).
+    """
+    query = db.query(CompanyDB)
+    if icp_fit:
+        query = query.filter(CompanyDB.icp_fit == icp_fit.upper())
+    return query.order_by(CompanyDB.last_signal_at.desc().nullslast(), CompanyDB.created_at.desc()).limit(limit).all()
+
+@app.get("/api/v1/companies/{company_id}", response_model=CompanyResponse)
+def get_company(company_id: int, db: Session = Depends(get_db)):
+    company = db.query(CompanyDB).filter(CompanyDB.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return company
+
+@app.post("/api/v1/companies/backfill")
+def backfill_companies(db: Session = Depends(get_db)):
+    """
+    Idempotent maintenance task: links pre-existing leads/signals (created
+    before the companies table existed) to a canonical Company row. Safe to
+    call repeatedly - only touches rows with no company_id yet.
+    """
+    return backfill_companies_from_existing_data(db)
+
+@app.post("/api/v1/companies/rescore")
+def rescore_companies(db: Session = Depends(get_db)):
+    """Recomputes icp_fit/icp_score for every company against the active ICP profile."""
+    active = icp_module.get_active_icp(db)
+    if not active:
+        raise HTTPException(status_code=400, detail="No active ICP profile - create one and POST /api/v1/icp/{id}/activate first")
+    companies = db.query(CompanyDB).all()
+    for c in companies:
+        icp_module.score_and_store(db, c, active)
+    return {"status": "completed", "rescored": len(companies), "icp_profile": active.name}
+
+@app.post("/api/v1/discovery/sec-edgar")
+async def run_sec_edgar_discovery(days_back: int = 7, db: Session = Depends(get_db)):
+    """
+    Triggers a real SEC EDGAR Form D discovery pass: recent private funding
+    filings, ICP-filtered by industry when an active ICP profile exists,
+    domain-verified before anything is stored. Free, no API key.
+    """
+    from app.sec_edgar import discover_from_sec_edgar
+    active_icp = icp_module.get_active_icp(db)
+    res = await discover_from_sec_edgar(db, icp=active_icp, days_back=days_back)
+    res["icp_profile_used"] = active_icp.name if active_icp else None
+    return res
 
 @app.post("/api/v1/crm/enrich")
 async def trigger_alep_enrichment(db: Session = Depends(get_db)):

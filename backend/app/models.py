@@ -6,6 +6,66 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
+class CompanyDB(Base):
+    """
+    Canonical, single-source-of-truth record for a real company - one row per
+    normalized root domain. Every crawler/enrichment source resolves-or-creates
+    a row here FIRST (see app.companies.get_or_create_company) rather than
+    inventing its own parallel copy of company data. Signals and leads attach
+    to this via company_id instead of duplicating company fields.
+    """
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    domain = Column(String(255), nullable=False, unique=True, index=True)
+    company_name = Column(String(255), nullable=True)
+    industry = Column(String(150), nullable=True)
+    country = Column(String(100), nullable=True)
+
+    # Only ever set from a real, named source - never guessed.
+    employee_count_source = Column(String(100), nullable=True)
+    employee_count_value = Column(String(100), nullable=True)
+
+    # Where this company was first discovered - always a real, named source
+    # (e.g. "sec_edgar_form_d", "greenhouse_watchlist", "manual", "website_form").
+    # Never "random"/"seed".
+    first_discovered_source = Column(String(100), nullable=False)
+    first_discovered_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_signal_at = Column(DateTime, nullable=True)
+
+    # Cached ICP evaluation - recomputed by app.icp.evaluate_company, never
+    # hand-set. NULL until an active ICPProfile has actually scored it.
+    icp_fit = Column(String(20), nullable=True)  # HIGH, MEDIUM, LOW, NONE
+    icp_score = Column(Integer, nullable=True)
+    icp_reasons = Column(Text, nullable=True)  # JSON list of strings - always traceable to a real field
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class ICPProfileDB(Base):
+    """
+    User-defined Ideal Customer Profile. This is config, not data - it drives
+    which companies discovery sources bother looking at and how they're
+    scored. Only one profile should be is_active at a time (enforced in
+    app.icp, not at the DB level, to keep sqlite migrations simple).
+    """
+    __tablename__ = "icp_profiles"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(150), nullable=False)
+    is_active = Column(Boolean, default=False)
+
+    industries = Column(Text, nullable=True)       # JSON list of keywords
+    geographies = Column(Text, nullable=True)       # JSON list of country/region names
+    employee_min = Column(Integer, nullable=True)
+    employee_max = Column(Integer, nullable=True)
+    target_titles = Column(Text, nullable=True)     # JSON list, e.g. ["VP Sales", "Head of Growth"]
+    excluded_domains = Column(Text, nullable=True)  # JSON list - existing customers/competitors
+    signal_weights = Column(Text, nullable=True)    # JSON dict overriding scoring.py defaults
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 class LeadDB(Base):
     """
     SQLAlchemy ORM model for QUANTA CRM Leads.
@@ -61,6 +121,11 @@ class LeadDB(Base):
     # OUTSOURCING INTENT ENGINE FIELDS
     outsourcing_intent_metadata = Column(Text, nullable=True)
 
+    # Link to the canonical company record (nullable - old rows and rows with
+    # no resolvable domain won't have one; new code should always set it via
+    # app.companies.get_or_create_company).
+    company_id = Column(Integer, nullable=True, index=True)
+
 class ExtensionSignalDB(Base):
     """
     SQLAlchemy ORM model for Chrome Extension Signals stored in quanta_crm.db under extension_signals table.
@@ -79,6 +144,7 @@ class ExtensionSignalDB(Base):
     enrichment_metadata = Column(Text, nullable=True)
     demo_sample = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    company_id = Column(Integer, nullable=True, index=True)
 
 class LinkedInProfileDB(Base):
     """
@@ -298,3 +364,48 @@ class LinkedInProfileUpdate(BaseModel):
     followup_date: Optional[str] = None
     notes: Optional[str] = None
     requirement_information: Optional[str] = None
+
+class CompanyResponse(BaseModel):
+    id: int
+    domain: str
+    company_name: Optional[str] = None
+    industry: Optional[str] = None
+    country: Optional[str] = None
+    employee_count_source: Optional[str] = None
+    employee_count_value: Optional[str] = None
+    first_discovered_source: str
+    first_discovered_at: datetime.datetime
+    last_signal_at: Optional[datetime.datetime] = None
+    icp_fit: Optional[str] = None
+    icp_score: Optional[int] = None
+    icp_reasons: Optional[str] = None
+    created_at: datetime.datetime
+    updated_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class ICPProfileCreate(BaseModel):
+    name: str
+    is_active: Optional[bool] = False
+    industries: Optional[List[str]] = None
+    geographies: Optional[List[str]] = None
+    employee_min: Optional[int] = None
+    employee_max: Optional[int] = None
+    target_titles: Optional[List[str]] = None
+    excluded_domains: Optional[List[str]] = None
+    signal_weights: Optional[Dict[str, float]] = None
+
+class ICPProfileResponse(BaseModel):
+    id: int
+    name: str
+    is_active: bool
+    industries: Optional[List[str]] = None
+    geographies: Optional[List[str]] = None
+    employee_min: Optional[int] = None
+    employee_max: Optional[int] = None
+    target_titles: Optional[List[str]] = None
+    excluded_domains: Optional[List[str]] = None
+    signal_weights: Optional[Dict[str, float]] = None
+    created_at: datetime.datetime
+    updated_at: Optional[datetime.datetime] = None

@@ -10,3 +10,5 @@ python-dotenv>=1.0.0
 dnspython>=2.4.0
 beautifulsoup4>=4.12.0
 feedparser>=6.0.10
+tldextract>=5.1.0
+lxml>=4.9.0

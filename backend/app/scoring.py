@@ -48,7 +48,7 @@ def calculate_multi_factor_intent_score(telemetry: Dict[str, Any]) -> Dict[str, 
     funding_round = (telemetry.get("funding_round") or "").lower()
     if any(tier in funding_round for tier in ["series b", "series c", "growth"]):
         funding_score = 18.0
-    elif any(tier in funding_round for tier in ["series a", "seed"]):
+    elif any(tier in funding_round for tier in ["series a", "seed", "regulation d", "reg d", "private placement"]):
         funding_score = 12.0
     else:
         funding_score = 0.0

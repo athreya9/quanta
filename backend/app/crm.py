@@ -50,7 +50,9 @@ def init_db():
             "ALTER TABLE extension_signals ADD COLUMN geo_location VARCHAR(255)",
             "ALTER TABLE extension_signals ADD COLUMN browser_fingerprint TEXT",
             "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT",
-            "ALTER TABLE extension_signals ADD COLUMN demo_sample BOOLEAN DEFAULT 0"
+            "ALTER TABLE extension_signals ADD COLUMN demo_sample BOOLEAN DEFAULT 0",
+            "ALTER TABLE leads ADD COLUMN company_id INTEGER",
+            "ALTER TABLE extension_signals ADD COLUMN company_id INTEGER"
         ]:
             try:
                 conn.execute(text(col_stmt))

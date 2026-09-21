@@ -139,6 +139,9 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
         if is_duplicate_signal(domain, event_type):
             continue
 
+        from app.companies import get_or_create_company, touch_last_signal
+        company = get_or_create_company(db, domain, company_name=sig["company"], source="qeic_crawler_watchlist")
+
         db_signal = ExtensionSignalDB(
             domain=domain,
             company=sig["company"],
@@ -154,9 +157,12 @@ async def execute_qeic_crawl_and_lead_build(db: Session) -> Dict[str, Any]:
                 "hiring_titles": sig["hiring_titles"],
                 "source_detail": "Real postings fetched from public Greenhouse/Lever API"
             }),
+            company_id=company.id if company else None,
             demo_sample=False
         )
         db.add(db_signal)
+        if company:
+            touch_last_signal(db, company)
         new_signals_count += 1
 
     if new_signals_count > 0:
