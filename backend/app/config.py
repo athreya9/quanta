@@ -21,5 +21,11 @@ SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
 PORT: int = int(os.getenv("PORT", 3002))
 ENV: str = os.getenv("ENV", "production")
 
+# Free (registration required, zero cost) UK government API - not a paid
+# provider. Without a key, app.companies_house gracefully returns nothing
+# rather than guessing. Register at:
+# https://developer.company-information.service.gov.uk/
+COMPANIES_HOUSE_API_KEY: str = os.getenv("COMPANIES_HOUSE_API_KEY", "")
+
 # INTENT_MODE can be 'production' (default) or 'demo'
 INTENT_MODE: str = os.getenv("INTENT_MODE", "production").lower().strip()

@@ -609,6 +609,31 @@ async def run_sec_edgar_discovery(days_back: int = 7, db: Session = Depends(get_
     res["industry_keywords_used"] = industry_keywords or "none (all active ICPs have no industry criteria - discovery is unfiltered)"
     return res
 
+@app.post("/api/v1/discovery/uk-companies-house")
+async def run_companies_house_discovery(industries: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Triggers a real UK Companies House discovery pass, filtered by real SIC
+    codes (see app.companies_house.SIC_CODES_BY_INDUSTRY). Requires
+    COMPANIES_HOUSE_API_KEY to be configured (free registration, not a paid
+    API) - returns status=not_configured otherwise rather than guessing.
+    `industries` is a comma-separated list (e.g. "automotive,electronics");
+    omit to search all configured categories.
+    """
+    from app.companies_house import discover_from_companies_house
+    industry_list = [i.strip() for i in industries.split(",")] if industries else None
+    return await discover_from_companies_house(db, industries=industry_list)
+
+@app.get("/api/v1/gleif/lookup")
+async def gleif_lookup_endpoint(company_name: str, country: Optional[str] = None):
+    """
+    Real, free, no-key lookup against the global LEI registry - confirms a
+    company is real/active and shows its real registered address/country.
+    Fact-checking layer, not a discovery engine (no industry data in GLEIF).
+    """
+    from app.gleif import lookup_by_name
+    results = await lookup_by_name(company_name, country=country)
+    return {"query": company_name, "country_filter": country, "matches": results}
+
 @app.post("/api/v1/crm/enrich")
 async def trigger_alep_enrichment(db: Session = Depends(get_db)):
     """
