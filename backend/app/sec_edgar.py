@@ -166,11 +166,14 @@ def resolve_and_verify_domain(entity_name: str) -> Optional[str]:
         return None
     return None
 
-async def discover_from_sec_edgar(db, icp=None, days_back: int = 7) -> Dict[str, Any]:
+async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None, days_back: int = 7) -> Dict[str, Any]:
     """
     Full discovery pass: real recent Form D filings -> verified domain ->
     canonical Company row + a FUNDING_FILING signal citing the real filing.
-    ICP-filters on industry_group when an active ICP with industries is given.
+    icp_industries (from app.icp.active_industry_keywords - the UNION of
+    every active project's industry criteria) filters on industry_group when
+    given; every project's ICP still scores the resulting companies
+    independently afterward via /api/v1/companies/rescore.
     """
     from app.companies import get_or_create_company, touch_last_signal
     from app.models import ExtensionSignalDB
@@ -178,9 +181,7 @@ async def discover_from_sec_edgar(db, icp=None, days_back: int = 7) -> Dict[str,
     from app.scoring import calculate_multi_factor_intent_score, generate_real_problem_statement
     import json as json_module
 
-    icp_industries = []
-    if icp and icp.industries:
-        icp_industries = [i.lower() for i in json_module.loads(icp.industries)]
+    icp_industries = icp_industries or []
 
     filings = search_recent_form_d(days_back=days_back)
     discovered = 0

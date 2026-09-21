@@ -35,36 +35,62 @@ class CompanyDB(Base):
 
     # Cached ICP evaluation - recomputed by app.icp.evaluate_company, never
     # hand-set. NULL until an active ICPProfile has actually scored it.
-    icp_fit = Column(String(20), nullable=True)  # HIGH, MEDIUM, LOW, NONE
+    # DEPRECATED: a company can now be scored against many simultaneous ICPs
+    # (see CompanyICPScoreDB) - a single cached fit/score here can't represent
+    # that. Left in place (unused going forward) rather than dropped, to
+    # avoid a risky SQLite column-drop migration on a live table.
+    icp_fit = Column(String(20), nullable=True)
     icp_score = Column(Integer, nullable=True)
-    icp_reasons = Column(Text, nullable=True)  # JSON list of strings - always traceable to a real field
+    icp_reasons = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class ICPProfileDB(Base):
     """
-    User-defined Ideal Customer Profile. This is config, not data - it drives
-    which companies discovery sources bother looking at and how they're
-    scored. Only one profile should be is_active at a time (enforced in
-    app.icp, not at the DB level, to keep sqlite migrations simple).
+    A named, project-specific Ideal Customer Profile. Many can exist and be
+    active at once - each project defines its own. The definition itself is
+    generic rules-as-data (see app.icp_fields for the field registry and
+    app.icp for the evaluator), not fixed columns, so a brand new kind of
+    criterion never requires a schema migration - just a new resolver
+    function in the registry.
     """
     __tablename__ = "icp_profiles"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(150), nullable=False)
-    is_active = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+    # Discovery workers (e.g. SEC EDGAR) union the industry-type criteria of
+    # every is_active profile to decide what's worth looking at. Multiple
+    # profiles can be active simultaneously - it's not an exclusive flag.
+    is_active = Column(Boolean, default=True)
 
-    industries = Column(Text, nullable=True)       # JSON list of keywords
-    geographies = Column(Text, nullable=True)       # JSON list of country/region names
-    employee_min = Column(Integer, nullable=True)
-    employee_max = Column(Integer, nullable=True)
-    target_titles = Column(Text, nullable=True)     # JSON list, e.g. ["VP Sales", "Head of Growth"]
-    excluded_domains = Column(Text, nullable=True)  # JSON list - existing customers/competitors
-    signal_weights = Column(Text, nullable=True)    # JSON dict overriding scoring.py defaults
+    # JSON list of {"field", "operator", "value", "weight"} rules. See
+    # app.icp_fields.FIELD_RESOLVERS for valid field names and app.icp for
+    # valid operators.
+    criteria = Column(Text, nullable=True)
+    excluded_domains = Column(Text, nullable=True)  # JSON list - hard veto, not a weighted rule
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class CompanyICPScoreDB(Base):
+    """
+    A company's fit against ONE specific ICP profile. Many-to-many by design:
+    the same company can be HIGH fit for Project A's ICP and LOW fit for
+    Project B's ICP at the same time - neither overwrites the other. This is
+    what makes "the ICP differs per project" work without duplicating company
+    data per project.
+    """
+    __tablename__ = "company_icp_scores"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    company_id = Column(Integer, nullable=False, index=True)
+    icp_profile_id = Column(Integer, nullable=False, index=True)
+    fit = Column(String(20), nullable=True)   # HIGH, MEDIUM, LOW, UNSCORED, EXCLUDED
+    score = Column(Integer, nullable=True)
+    reasons = Column(Text, nullable=True)     # JSON list of strings, always traceable to a real field
+    computed_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class LeadDB(Base):
     """
@@ -385,27 +411,34 @@ class CompanyResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ICPRule(BaseModel):
+    field: str                              # must exist in app.icp_fields.FIELD_RESOLVERS
+    operator: str                           # contains_any, contains_all, in, equals, between, gte, lte, is_true, is_false
+    value: Optional[Any] = None
+    weight: float = 10.0
+
 class ICPProfileCreate(BaseModel):
     name: str
-    is_active: Optional[bool] = False
-    industries: Optional[List[str]] = None
-    geographies: Optional[List[str]] = None
-    employee_min: Optional[int] = None
-    employee_max: Optional[int] = None
-    target_titles: Optional[List[str]] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = True
+    criteria: Optional[List[ICPRule]] = None
     excluded_domains: Optional[List[str]] = None
-    signal_weights: Optional[Dict[str, float]] = None
 
 class ICPProfileResponse(BaseModel):
     id: int
     name: str
+    description: Optional[str] = None
     is_active: bool
-    industries: Optional[List[str]] = None
-    geographies: Optional[List[str]] = None
-    employee_min: Optional[int] = None
-    employee_max: Optional[int] = None
-    target_titles: Optional[List[str]] = None
+    criteria: Optional[List[Dict[str, Any]]] = None
     excluded_domains: Optional[List[str]] = None
-    signal_weights: Optional[Dict[str, float]] = None
     created_at: datetime.datetime
     updated_at: Optional[datetime.datetime] = None
+
+class CompanyICPScoreResponse(BaseModel):
+    company_id: int
+    icp_profile_id: int
+    icp_profile_name: Optional[str] = None
+    fit: Optional[str] = None
+    score: Optional[int] = None
+    reasons: Optional[List[str]] = None
+    computed_at: Optional[datetime.datetime] = None

@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse, CompanyICPScoreDB, CompanyICPScoreResponse
 from app.linkedin_crawler import crawl_linkedin_icp_profiles, add_linkedin_profile, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
@@ -316,57 +316,78 @@ def update_linkedin_profile(profile_id: int, payload: LinkedInProfileUpdate, db:
     db.refresh(profile)
     return profile
 
-# ============ ICP Profiles ============
+# ============ ICP Profiles (many can exist/be active at once - one per project) ============
 
 @app.get("/api/v1/icp", response_model=list[ICPProfileResponse])
-def list_icp_profiles_endpoint(db: Session = Depends(get_db)):
-    """Lists all ICP (Ideal Customer Profile) definitions."""
-    profiles = icp_module.list_icp_profiles(db)
+def list_icp_profiles_endpoint(active_only: bool = False, db: Session = Depends(get_db)):
+    """Lists all ICP (Ideal Customer Profile) definitions - one per project."""
+    profiles = icp_module.list_icp_profiles(db, active_only=active_only)
     return [_serialize_icp(p) for p in profiles]
+
+@app.get("/api/v1/icp/fields")
+def list_icp_fields():
+    """The menu of facts an ICP rule can reference right now. Grows as new data sources are added - never guess a field name."""
+    from app.icp_fields import list_available_fields
+    return {"available_fields": list_available_fields()}
 
 @app.post("/api/v1/icp", response_model=ICPProfileResponse, status_code=status.HTTP_201_CREATED)
 def create_icp_profile_endpoint(payload: ICPProfileCreate, db: Session = Depends(get_db)):
     """
-    Creates an ICP definition. This is what drives which companies discovery
-    sources bother looking at and how they're scored - set is_active=true to
-    make it the profile everything else reads.
+    Creates a project's ICP as a list of {field, operator, value, weight}
+    rules - see GET /api/v1/icp/fields for valid field names. Multiple
+    profiles can exist and be active simultaneously, one per project.
     """
     profile = icp_module.create_icp_profile(db, payload.model_dump())
     return _serialize_icp(profile)
 
+@app.post("/api/v1/icp/{profile_id}/clone", response_model=ICPProfileResponse, status_code=status.HTTP_201_CREATED)
+def clone_icp_profile_endpoint(profile_id: int, new_name: str, db: Session = Depends(get_db)):
+    """Starts a new project's ICP from an existing one - copy then tweak."""
+    clone = icp_module.clone_icp_profile(db, profile_id, new_name)
+    if not clone:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return _serialize_icp(clone)
+
 @app.post("/api/v1/icp/{profile_id}/activate", response_model=ICPProfileResponse)
 def activate_icp_profile_endpoint(profile_id: int, db: Session = Depends(get_db)):
-    profile = icp_module.activate_icp_profile(db, profile_id)
+    profile = icp_module.set_icp_active(db, profile_id, True)
+    if not profile:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return _serialize_icp(profile)
+
+@app.post("/api/v1/icp/{profile_id}/deactivate", response_model=ICPProfileResponse)
+def deactivate_icp_profile_endpoint(profile_id: int, db: Session = Depends(get_db)):
+    profile = icp_module.set_icp_active(db, profile_id, False)
     if not profile:
         raise HTTPException(status_code=404, detail="ICP profile not found")
     return _serialize_icp(profile)
 
 def _serialize_icp(p) -> dict:
     return {
-        "id": p.id, "name": p.name, "is_active": p.is_active,
-        "industries": json.loads(p.industries) if p.industries else None,
-        "geographies": json.loads(p.geographies) if p.geographies else None,
-        "employee_min": p.employee_min, "employee_max": p.employee_max,
-        "target_titles": json.loads(p.target_titles) if p.target_titles else None,
+        "id": p.id, "name": p.name, "description": p.description, "is_active": p.is_active,
+        "criteria": json.loads(p.criteria) if p.criteria else None,
         "excluded_domains": json.loads(p.excluded_domains) if p.excluded_domains else None,
-        "signal_weights": json.loads(p.signal_weights) if p.signal_weights else None,
         "created_at": p.created_at, "updated_at": p.updated_at,
     }
 
 # ============ Companies (single source of truth) ============
 
 @app.get("/api/v1/companies", response_model=list[CompanyResponse])
-def list_companies(icp_fit: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
+def list_companies(icp_profile_id: Optional[int] = None, fit: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
     """
-    Lists canonical company records. Every signal/lead in the system traces
-    back to one of these - this is the de-duplicated view of "who have we
-    actually found evidence about", filterable by ICP fit (HIGH/MEDIUM/LOW/
-    UNSCORED/EXCLUDED).
+    Lists canonical company records - the de-duplicated view of "who have we
+    actually found evidence about". Pass icp_profile_id (+ optional fit) to
+    view one project's qualified list over this same shared data.
     """
-    query = db.query(CompanyDB)
-    if icp_fit:
-        query = query.filter(CompanyDB.icp_fit == icp_fit.upper())
-    return query.order_by(CompanyDB.last_signal_at.desc().nullslast(), CompanyDB.created_at.desc()).limit(limit).all()
+    if icp_profile_id:
+        query = db.query(CompanyDB).join(CompanyICPScoreDB, CompanyICPScoreDB.company_id == CompanyDB.id).filter(
+            CompanyICPScoreDB.icp_profile_id == icp_profile_id
+        )
+        if fit:
+            query = query.filter(CompanyICPScoreDB.fit == fit.upper())
+        return query.order_by(CompanyDB.last_signal_at.desc().nullslast()).limit(limit).all()
+
+    return db.query(CompanyDB).order_by(CompanyDB.last_signal_at.desc().nullslast(), CompanyDB.created_at.desc()).limit(limit).all()
 
 @app.get("/api/v1/companies/{company_id}", response_model=CompanyResponse)
 def get_company(company_id: int, db: Session = Depends(get_db)):
@@ -374,6 +395,23 @@ def get_company(company_id: int, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
+
+@app.get("/api/v1/companies/{company_id}/icp-scores", response_model=list[CompanyICPScoreResponse])
+def get_company_icp_scores(company_id: int, db: Session = Depends(get_db)):
+    """Every project's fit score for this one company, side by side."""
+    from app.models import ICPProfileDB as ICPModel
+    rows = db.query(CompanyICPScoreDB).filter(CompanyICPScoreDB.company_id == company_id).all()
+    out = []
+    for r in rows:
+        profile = db.query(ICPModel).filter(ICPModel.id == r.icp_profile_id).first()
+        out.append({
+            "company_id": r.company_id, "icp_profile_id": r.icp_profile_id,
+            "icp_profile_name": profile.name if profile else None,
+            "fit": r.fit, "score": r.score,
+            "reasons": json.loads(r.reasons) if r.reasons else None,
+            "computed_at": r.computed_at,
+        })
+    return out
 
 @app.post("/api/v1/companies/backfill")
 def backfill_companies(db: Session = Depends(get_db)):
@@ -385,15 +423,29 @@ def backfill_companies(db: Session = Depends(get_db)):
     return backfill_companies_from_existing_data(db)
 
 @app.post("/api/v1/companies/rescore")
-def rescore_companies(db: Session = Depends(get_db)):
-    """Recomputes icp_fit/icp_score for every company against the active ICP profile."""
-    active = icp_module.get_active_icp(db)
-    if not active:
-        raise HTTPException(status_code=400, detail="No active ICP profile - create one and POST /api/v1/icp/{id}/activate first")
+def rescore_companies(icp_profile_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """
+    Recomputes fit for every company against one ICP profile (or every
+    active profile if icp_profile_id is omitted). Each profile's scores are
+    stored independently - rescoring Project A never touches Project B's view.
+    """
+    if icp_profile_id:
+        profiles = [icp_module.get_icp_profile(db, icp_profile_id)]
+        if not profiles[0]:
+            raise HTTPException(status_code=404, detail="ICP profile not found")
+    else:
+        profiles = icp_module.list_icp_profiles(db, active_only=True)
+        if not profiles:
+            raise HTTPException(status_code=400, detail="No active ICP profiles - create one via POST /api/v1/icp first")
+
     companies = db.query(CompanyDB).all()
-    for c in companies:
-        icp_module.score_and_store(db, c, active)
-    return {"status": "completed", "rescored": len(companies), "icp_profile": active.name}
+    results = {}
+    for profile in profiles:
+        for c in companies:
+            icp_module.score_and_store(db, c, profile)
+        results[profile.name] = len(companies)
+
+    return {"status": "completed", "companies_rescored": len(companies), "profiles": results}
 
 @app.post("/api/v1/discovery/sec-edgar")
 async def run_sec_edgar_discovery(days_back: int = 7, db: Session = Depends(get_db)):
@@ -403,9 +455,9 @@ async def run_sec_edgar_discovery(days_back: int = 7, db: Session = Depends(get_
     domain-verified before anything is stored. Free, no API key.
     """
     from app.sec_edgar import discover_from_sec_edgar
-    active_icp = icp_module.get_active_icp(db)
-    res = await discover_from_sec_edgar(db, icp=active_icp, days_back=days_back)
-    res["icp_profile_used"] = active_icp.name if active_icp else None
+    industry_keywords = icp_module.active_industry_keywords(db)
+    res = await discover_from_sec_edgar(db, icp_industries=industry_keywords, days_back=days_back)
+    res["industry_keywords_used"] = industry_keywords or "none (all active ICPs have no industry criteria - discovery is unfiltered)"
     return res
 
 @app.post("/api/v1/crm/enrich")

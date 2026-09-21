@@ -19,8 +19,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     os.makedirs(DB_DIR, exist_ok=True)
+
+    # icp_profiles changed from fixed columns (industries/geographies/...) to
+    # generic criteria-as-JSON. create_all() only creates missing tables, it
+    # can't reshape an existing one - so if the old-shape table exists AND is
+    # empty (never holds real irreplaceable data at this schema version),
+    # drop it so create_all rebuilds it with the current model. If it somehow
+    # has rows, leave it alone rather than risk deleting something real.
+    with engine.connect() as conn:
+        try:
+            existing_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(icp_profiles)")).fetchall()]
+            if existing_cols and "criteria" not in existing_cols:
+                count = conn.execute(text("SELECT COUNT(*) FROM icp_profiles")).scalar()
+                if count == 0:
+                    conn.execute(text("DROP TABLE icp_profiles"))
+                    conn.commit()
+        except Exception:
+            pass
+
     Base.metadata.create_all(bind=engine)
-    
+
     # Auto-migrate missing columns for SQLite quanta_crm.db
     with engine.connect() as conn:
         for col_stmt in [

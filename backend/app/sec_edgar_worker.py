@@ -14,10 +14,20 @@ async def run_sec_edgar_cycle():
     """Single discovery pass against real, recent SEC Form D filings."""
     db = SessionLocal()
     try:
-        active_icp = icp_module.get_active_icp(db)
-        logger.info(f"Running SEC EDGAR Form D discovery (ICP: {active_icp.name if active_icp else 'none configured - unfiltered'})...")
-        res = await discover_from_sec_edgar(db, icp=active_icp, days_back=2)
+        industry_keywords = icp_module.active_industry_keywords(db)
+        logger.info(f"Running SEC EDGAR Form D discovery (industry keywords: {industry_keywords or 'none - unfiltered'})...")
+        res = await discover_from_sec_edgar(db, icp_industries=industry_keywords, days_back=2)
         logger.info(f"SEC EDGAR cycle complete: {res}")
+
+        # Score every newly/existing discovered company against every active
+        # project ICP, so each project's qualified list stays current.
+        from app.models import CompanyDB
+        active_profiles = icp_module.list_icp_profiles(db, active_only=True)
+        if active_profiles:
+            companies = db.query(CompanyDB).all()
+            for profile in active_profiles:
+                for c in companies:
+                    icp_module.score_and_store(db, c, profile)
         return res
     except Exception as e:
         logger.error(f"Error during SEC EDGAR worker execution: {e}")
