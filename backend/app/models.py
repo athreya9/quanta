@@ -71,6 +71,11 @@ class ICPProfileDB(Base):
     criteria = Column(Text, nullable=True)
     excluded_domains = Column(Text, nullable=True)  # JSON list - hard veto, not a weighted rule
 
+    # User-authored value-prop/pitch for this project (e.g. what Connect1to1
+    # or Aarika actually offers). This is config the user owns and approves -
+    # app.outreach never invents persuasive copy, only the signal citations.
+    outreach_pitch = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -423,6 +428,7 @@ class ICPProfileCreate(BaseModel):
     is_active: Optional[bool] = True
     criteria: Optional[List[ICPRule]] = None
     excluded_domains: Optional[List[str]] = None
+    outreach_pitch: Optional[str] = None
 
 class ICPProfileResponse(BaseModel):
     id: int
@@ -431,8 +437,20 @@ class ICPProfileResponse(BaseModel):
     is_active: bool
     criteria: Optional[List[Dict[str, Any]]] = None
     excluded_domains: Optional[List[str]] = None
+    outreach_pitch: Optional[str] = None
     created_at: datetime.datetime
     updated_at: Optional[datetime.datetime] = None
+
+class OutreachDraftResponse(BaseModel):
+    status: str  # DRAFT_READY or INSUFFICIENT_DATA
+    company_id: int
+    company_name: Optional[str] = None
+    icp_profile_id: int
+    icp_profile_name: Optional[str] = None
+    subject_line: Optional[str] = None
+    email_body: Optional[str] = None
+    cited_signals: List[Dict[str, Any]] = []
+    reason: Optional[str] = None
 
 class CompanyICPScoreResponse(BaseModel):
     company_id: int

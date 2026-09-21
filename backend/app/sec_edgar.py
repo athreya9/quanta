@@ -26,6 +26,7 @@ What this module does NOT do:
     reporting is fine, mislabeling a random domain as this company is not.
 """
 import re
+import asyncio
 import logging
 import datetime
 from typing import Optional, Dict, Any, List
@@ -54,7 +55,7 @@ def _significant_tokens(name: str) -> List[str]:
     tokens = [t for t in clean.split() if t and t not in CORP_SUFFIXES and len(t) > 1]
     return tokens
 
-def search_recent_form_d(days_back: int = 7, limit: int = 40) -> List[Dict[str, Any]]:
+async def search_recent_form_d(days_back: int = 7, limit: int = 40) -> List[Dict[str, Any]]:
     """Real SEC EDGAR full-text search for recent Form D filings. No key required."""
     end = datetime.date.today()
     start = end - datetime.timedelta(days=days_back)
@@ -64,8 +65,8 @@ def search_recent_form_d(days_back: int = 7, limit: int = 40) -> List[Dict[str, 
     )
     results = []
     try:
-        with httpx.Client(timeout=10.0, headers=SEC_HEADERS) as client:
-            resp = client.get(url)
+        async with httpx.AsyncClient(timeout=10.0, headers=SEC_HEADERS) as client:
+            resp = await client.get(url)
             if resp.status_code != 200:
                 logger.warning(f"SEC EDGAR search returned HTTP {resp.status_code}")
                 return []
@@ -93,13 +94,13 @@ def search_recent_form_d(days_back: int = 7, limit: int = 40) -> List[Dict[str, 
         return []
     return results
 
-def fetch_form_d_detail(cik: str, accession: str) -> Optional[Dict[str, Any]]:
+async def fetch_form_d_detail(cik: str, accession: str) -> Optional[Dict[str, Any]]:
     """Fetches and parses the real primary_doc.xml for one filing."""
     cik_num = str(int(cik))
     doc_url = f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{accession}/primary_doc.xml"
     try:
-        with httpx.Client(timeout=10.0, headers=SEC_HEADERS) as client:
-            resp = client.get(doc_url)
+        async with httpx.AsyncClient(timeout=10.0, headers=SEC_HEADERS) as client:
+            resp = await client.get(doc_url)
             if resp.status_code != 200:
                 return None
             soup = BeautifulSoup(resp.text, "xml")
@@ -133,7 +134,7 @@ def fetch_form_d_detail(cik: str, accession: str) -> Optional[Dict[str, Any]]:
         logger.debug(f"SEC EDGAR detail fetch failed for CIK {cik}: {e}")
         return None
 
-def resolve_and_verify_domain(entity_name: str) -> Optional[str]:
+async def resolve_and_verify_domain(entity_name: str) -> Optional[str]:
     """
     Tries the single most likely .com domain for a company name and only
     accepts it if the domain resolves AND its real homepage content actually
@@ -146,12 +147,12 @@ def resolve_and_verify_domain(entity_name: str) -> Optional[str]:
         return None
 
     candidate_domain = "".join(tokens) + ".com"
-    if not domain_resolves(candidate_domain):
+    if not await asyncio.to_thread(domain_resolves, candidate_domain):
         return None
 
     try:
-        with httpx.Client(timeout=6.0, follow_redirects=True) as client:
-            resp = client.get(f"https://{candidate_domain}", headers={"User-Agent": "Mozilla/5.0"})
+        async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
+            resp = await client.get(f"https://{candidate_domain}", headers={"User-Agent": "Mozilla/5.0"})
             if resp.status_code != 200:
                 return None
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -183,14 +184,14 @@ async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None
 
     icp_industries = icp_industries or []
 
-    filings = search_recent_form_d(days_back=days_back)
+    filings = await search_recent_form_d(days_back=days_back)
     discovered = 0
     domain_verified = 0
     signals_created = 0
     skipped_no_domain = 0
 
     for filing in filings:
-        detail = fetch_form_d_detail(filing["cik"], filing["accession"])
+        detail = await fetch_form_d_detail(filing["cik"], filing["accession"])
         if not detail or not detail.get("entity_name"):
             continue
         discovered += 1
@@ -199,7 +200,7 @@ async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None
             if not any(kw in detail["industry_group"].lower() for kw in icp_industries):
                 continue
 
-        domain = resolve_and_verify_domain(detail["entity_name"])
+        domain = await resolve_and_verify_domain(detail["entity_name"])
         if not domain:
             skipped_no_domain += 1
             continue

@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 import asyncio
-from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse, CompanyICPScoreDB, CompanyICPScoreResponse
+from app.models import LeadDB, LeadCreate, LeadResponse, SignalItem, AlertTestResponse, ChromeExtensionEvent, ExtensionIngestPayload, ExtensionSignalDB, LinkedInProfileDB, LinkedInProfileResponse, LinkedInProfileUpdate, LinkedInProfileCreate, CompanyDB, CompanyResponse, ICPProfileCreate, ICPProfileResponse, CompanyICPScoreDB, CompanyICPScoreResponse, OutreachDraftResponse
 from app.linkedin_crawler import crawl_linkedin_icp_profiles, add_linkedin_profile, verify_linkedin_url
 from app.crm import init_db, get_db, create_crm_lead, get_all_leads, create_extension_signal
 from app.signals import generate_live_signals, dispatch_high_intent_alerts
@@ -367,6 +367,7 @@ def _serialize_icp(p) -> dict:
         "id": p.id, "name": p.name, "description": p.description, "is_active": p.is_active,
         "criteria": json.loads(p.criteria) if p.criteria else None,
         "excluded_domains": json.loads(p.excluded_domains) if p.excluded_domains else None,
+        "outreach_pitch": p.outreach_pitch,
         "created_at": p.created_at, "updated_at": p.updated_at,
     }
 
@@ -446,6 +447,25 @@ def rescore_companies(icp_profile_id: Optional[int] = None, db: Session = Depend
         results[profile.name] = len(companies)
 
     return {"status": "completed", "companies_rescored": len(companies), "profiles": results}
+
+@app.get("/api/v1/companies/{company_id}/draft-outreach", response_model=OutreachDraftResponse)
+def draft_outreach_endpoint(company_id: int, icp_profile_id: int, db: Session = Depends(get_db)):
+    """
+    Drafts outreach copy for one company under one project's ICP. Returns
+    INSUFFICIENT_DATA (no draft) if there's no real signal on file for this
+    company - never falls back to generic/fabricated content. Every fact in
+    a DRAFT_READY response is cited back to a real signal_id/source_url so it
+    can be verified before anything is sent. Nothing is sent automatically -
+    this only returns a draft for a human to review.
+    """
+    from app.outreach import draft_outreach_for_company
+    company = db.query(CompanyDB).filter(CompanyDB.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    icp = icp_module.get_icp_profile(db, icp_profile_id)
+    if not icp:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return draft_outreach_for_company(db, company, icp)
 
 @app.post("/api/v1/discovery/sec-edgar")
 async def run_sec_edgar_discovery(days_back: int = 7, db: Session = Depends(get_db)):

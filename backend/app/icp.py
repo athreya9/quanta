@@ -26,6 +26,7 @@ def create_icp_profile(db: Session, data: Dict[str, Any]) -> ICPProfileDB:
         is_active=data.get("is_active", True),
         criteria=json.dumps(criteria) if criteria else None,
         excluded_domains=json.dumps(data.get("excluded_domains")) if data.get("excluded_domains") else None,
+        outreach_pitch=data.get("outreach_pitch"),
     )
     db.add(profile)
     db.commit()
@@ -43,6 +44,7 @@ def clone_icp_profile(db: Session, profile_id: int, new_name: str) -> Optional[I
         is_active=True,
         criteria=original.criteria,
         excluded_domains=original.excluded_domains,
+        outreach_pitch=original.outreach_pitch,
     )
     db.add(clone)
     db.commit()

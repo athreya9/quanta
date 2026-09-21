@@ -70,7 +70,8 @@ def init_db():
             "ALTER TABLE extension_signals ADD COLUMN enrichment_metadata TEXT",
             "ALTER TABLE extension_signals ADD COLUMN demo_sample BOOLEAN DEFAULT 0",
             "ALTER TABLE leads ADD COLUMN company_id INTEGER",
-            "ALTER TABLE extension_signals ADD COLUMN company_id INTEGER"
+            "ALTER TABLE extension_signals ADD COLUMN company_id INTEGER",
+            "ALTER TABLE icp_profiles ADD COLUMN outreach_pitch TEXT"
         ]:
             try:
                 conn.execute(text(col_stmt))
