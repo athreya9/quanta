@@ -348,6 +348,14 @@ def clone_icp_profile_endpoint(profile_id: int, new_name: str, db: Session = Dep
         raise HTTPException(status_code=404, detail="ICP profile not found")
     return _serialize_icp(clone)
 
+@app.patch("/api/v1/icp/{profile_id}", response_model=ICPProfileResponse)
+def update_icp_profile_endpoint(profile_id: int, payload: ICPProfileCreate, db: Session = Depends(get_db)):
+    """Updates a project's ICP in place (criteria, geography, pitch, etc.) rather than creating a near-duplicate."""
+    profile = icp_module.update_icp_profile(db, profile_id, payload.model_dump(exclude_unset=True))
+    if not profile:
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return _serialize_icp(profile)
+
 @app.post("/api/v1/icp/{profile_id}/activate", response_model=ICPProfileResponse)
 def activate_icp_profile_endpoint(profile_id: int, db: Session = Depends(get_db)):
     profile = icp_module.set_icp_active(db, profile_id, True)

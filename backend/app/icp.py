@@ -33,6 +33,28 @@ def create_icp_profile(db: Session, data: Dict[str, Any]) -> ICPProfileDB:
     db.refresh(profile)
     return profile
 
+def update_icp_profile(db: Session, profile_id: int, data: Dict[str, Any]) -> Optional[ICPProfileDB]:
+    """Updates a project's ICP in place. Only fields actually present in data are changed."""
+    profile = db.query(ICPProfileDB).filter(ICPProfileDB.id == profile_id).first()
+    if not profile:
+        return None
+    if "name" in data and data["name"] is not None:
+        profile.name = data["name"]
+    if "description" in data and data["description"] is not None:
+        profile.description = data["description"]
+    if "criteria" in data and data["criteria"] is not None:
+        profile.criteria = json.dumps(data["criteria"])
+    if "excluded_domains" in data and data["excluded_domains"] is not None:
+        profile.excluded_domains = json.dumps(data["excluded_domains"])
+    if "outreach_pitch" in data and data["outreach_pitch"] is not None:
+        profile.outreach_pitch = data["outreach_pitch"]
+    if "is_active" in data and data["is_active"] is not None:
+        profile.is_active = data["is_active"]
+    profile.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return profile
+
 def clone_icp_profile(db: Session, profile_id: int, new_name: str) -> Optional[ICPProfileDB]:
     """Duplicates an existing project's ICP as a starting point for a new one."""
     original = db.query(ICPProfileDB).filter(ICPProfileDB.id == profile_id).first()
