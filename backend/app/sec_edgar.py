@@ -56,43 +56,58 @@ def _significant_tokens(name: str) -> List[str]:
     return tokens
 
 async def search_recent_form_d(days_back: int = 7, limit: int = 40) -> List[Dict[str, Any]]:
-    """Real SEC EDGAR full-text search for recent Form D filings. No key required."""
+    """
+    Real SEC EDGAR full-text search for recent Form D filings. No key
+    required. Pages through the real API (via its `from` offset) rather
+    than only ever reading the first 40 hits - there were 5,164 real Form D
+    filings in just the last 30 days at time of writing, so a fixed 40-hit
+    cap meant `days_back` alone did nothing to actually surface more once
+    the date range exceeded a few days' worth of filings.
+    """
     end = datetime.date.today()
     start = end - datetime.timedelta(days=days_back)
-    url = (
+    base_url = (
         "https://efts.sec.gov/LATEST/search-index"
         f"?forms=D&dateRange=custom&startdt={start.isoformat()}&enddt={end.isoformat()}"
     )
     results = []
     try:
         async with httpx.AsyncClient(timeout=10.0, headers=SEC_HEADERS) as client:
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                logger.warning(f"SEC EDGAR search returned HTTP {resp.status_code}")
-                return []
-            data = resp.json()
-            for hit in data.get("hits", {}).get("hits", [])[:limit]:
-                src = hit.get("_source", {})
-                names = src.get("display_names", [])
-                if not names:
-                    continue
-                entity_name = re.sub(r"\s*\(CIK\s*\d+\)", "", names[0]).strip()
-                cik = (src.get("ciks") or [None])[0]
-                accession = src.get("adsh", "").replace("-", "")
-                if not cik or not accession:
-                    continue
-                results.append({
-                    "entity_name": entity_name,
-                    "cik": cik,
-                    "accession": accession,
-                    "filing_date": src.get("file_date"),
-                    "state": (src.get("biz_states") or [None])[0],
-                    "filing_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=D",
-                })
+            offset = 0
+            page_size = 100  # SEC EDGAR full text search page size
+            while len(results) < limit:
+                resp = await client.get(f"{base_url}&from={offset}")
+                if resp.status_code != 200:
+                    logger.warning(f"SEC EDGAR search returned HTTP {resp.status_code}")
+                    break
+                data = resp.json()
+                hits = data.get("hits", {}).get("hits", [])
+                if not hits:
+                    break
+                for hit in hits:
+                    src = hit.get("_source", {})
+                    names = src.get("display_names", [])
+                    if not names:
+                        continue
+                    entity_name = re.sub(r"\s*\(CIK\s*\d+\)", "", names[0]).strip()
+                    cik = (src.get("ciks") or [None])[0]
+                    accession = src.get("adsh", "").replace("-", "")
+                    if not cik or not accession:
+                        continue
+                    results.append({
+                        "entity_name": entity_name,
+                        "cik": cik,
+                        "accession": accession,
+                        "filing_date": src.get("file_date"),
+                        "state": (src.get("biz_states") or [None])[0],
+                        "filing_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=D",
+                    })
+                    if len(results) >= limit:
+                        break
+                offset += page_size
     except Exception as e:
         logger.warning(f"SEC EDGAR search failed: {e}")
-        return []
-    return results
+    return results[:limit]
 
 async def fetch_form_d_detail(cik: str, accession: str) -> Optional[Dict[str, Any]]:
     """Fetches and parses the real primary_doc.xml for one filing."""
@@ -167,7 +182,7 @@ async def resolve_and_verify_domain(entity_name: str) -> Optional[str]:
         return None
     return None
 
-async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None, days_back: int = 7) -> Dict[str, Any]:
+async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None, days_back: int = 7, limit: int = 40) -> Dict[str, Any]:
     """
     Full discovery pass: real recent Form D filings -> verified domain ->
     canonical Company row + a FUNDING_FILING signal citing the real filing.
@@ -184,7 +199,7 @@ async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None
 
     icp_industries = icp_industries or []
 
-    filings = await search_recent_form_d(days_back=days_back)
+    filings = await search_recent_form_d(days_back=days_back, limit=limit)
     discovered = 0
     domain_verified = 0
     signals_created = 0
