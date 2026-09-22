@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Shield, ArrowRight, LayoutDashboard, Radio, Bell, Linkedin } from 'lucide-react';
+import { Activity, Shield, ArrowRight, LayoutDashboard, Radio, Bell, Linkedin, Layers } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -83,8 +83,15 @@ export default function Navbar({ activeTab, setActiveTab }) {
         >
           Engine Overview
         </button>
-        <button 
-          onClick={() => setActiveTab('signals')} 
+        <button
+          onClick={() => setActiveTab('pipeline')}
+          className={`hover:text-white flex items-center gap-1.5 transition py-1 ${activeTab === 'pipeline' ? 'text-blue-400 font-semibold' : ''}`}
+        >
+          <Layers className="w-4 h-4 text-blue-400" />
+          <span>Pipeline</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('signals')}
           className={`hover:text-white flex items-center gap-1.5 transition py-1 ${activeTab === 'signals' ? 'text-blue-400 font-semibold' : ''}`}
         >
           <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />

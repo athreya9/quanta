@@ -3,18 +3,39 @@ import { Zap, ShieldCheck, ArrowRight, Activity, TrendingUp, Bell, Download } fr
 
 export default function HeroSection({ setActiveTab }) {
   const [tickerIndex, setTickerIndex] = useState(0);
-  const tickerEvents = [
-    { company: "FinTech Enterprise Inc.", event: "8 concurrent pricing page visits from HQ domain", score: 98, time: "Just now" },
-    { company: "CloudScale Systems", event: "Installed intent webhook API & removed legacy tracking", score: 94, time: "2m ago" },
-    { company: "HyperGrowth SaaS", event: "Appointed VP of RevOps & posted 6 SDR roles", score: 91, time: "4m ago" }
-  ];
+  const [tickerEvents, setTickerEvents] = useState([]);
 
   useEffect(() => {
+    const fetchReal = async () => {
+      try {
+        const res = await fetch('/api/v1/signals');
+        if (res.ok) {
+          const data = await res.json();
+          setTickerEvents(
+            data.slice(0, 5).map(s => ({
+              company: s.company || s.domain,
+              event: s.description,
+              score: s.intent_score,
+              time: s.detected_at || s.timestamp || '',
+            }))
+          );
+        }
+      } catch (e) {
+        // no fallback - an empty ticker is honest, fabricated activity is not
+      }
+    };
+    fetchReal();
+    const poll = setInterval(fetchReal, 30000);
+    return () => clearInterval(poll);
+  }, []);
+
+  useEffect(() => {
+    if (tickerEvents.length === 0) return;
     const timer = setInterval(() => {
       setTickerIndex((prev) => (prev + 1) % tickerEvents.length);
     }, 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [tickerEvents.length]);
 
   return (
     <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto overflow-hidden">
@@ -73,33 +94,37 @@ export default function HeroSection({ setActiveTab }) {
           </a>
         </div>
 
-        {/* Ticker Simulation Card */}
+        {/* Live signal ticker - real data from /api/v1/signals, no fallback content */}
         <div className="card-dark p-4 sm:p-5 max-w-2xl mx-auto text-left border-slate-800 shadow-2xl relative overflow-hidden">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-3 border-b border-slate-800/80 pb-2">
             <span className="flex items-center gap-1.5 text-blue-400 font-semibold uppercase tracking-wider">
               <Bell className="w-3.5 h-3.5 text-amber-400 animate-bounce" /> Live Intent Intercept
             </span>
-            <span className="text-slate-500 font-mono">Stream ID: QN-89302</span>
+            <span className="text-slate-500 font-mono">/api/v1/signals</span>
           </div>
 
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h4 className="text-sm font-bold text-white mb-1">
-                {tickerEvents[tickerIndex].company}
-              </h4>
-              <p className="text-xs text-slate-300">
-                {tickerEvents[tickerIndex].event}
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <span className="badge-gold">
-                Score: {tickerEvents[tickerIndex].score}/100
-              </span>
-              <div className="text-[10px] text-slate-500 mt-1">
-                {tickerEvents[tickerIndex].time}
+          {tickerEvents.length > 0 ? (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white mb-1">
+                  {tickerEvents[tickerIndex].company}
+                </h4>
+                <p className="text-xs text-slate-300">
+                  {tickerEvents[tickerIndex].event}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="badge-gold">
+                  Score: {tickerEvents[tickerIndex].score}/100
+                </span>
+                <div className="text-[10px] text-slate-500 mt-1">
+                  {tickerEvents[tickerIndex].time}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-500">No signals captured yet - real activity will appear here as discovery/crawler passes run.</p>
+          )}
         </div>
       </div>
     </section>

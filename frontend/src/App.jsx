@@ -12,6 +12,7 @@ import BottomNav from './components/BottomNav';
 import TelemetryView from './components/TelemetryView';
 import LogoDownloader from './components/LogoDownloader';
 import LinkedInView from './components/LinkedInView';
+import PipelineView from './components/PipelineView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('landing');
@@ -42,6 +43,10 @@ export default function App() {
 
         {activeTab === 'crm' && (
           <CRMView />
+        )}
+
+        {activeTab === 'pipeline' && (
+          <PipelineView />
         )}
 
         {activeTab === 'linkedin' && (
