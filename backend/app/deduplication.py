@@ -3,7 +3,14 @@ import datetime
 
 logger = logging.getLogger("quanta.deduplication")
 
-DEDUP_WINDOW_SECONDS = 1800  # 30 minutes
+DEDUP_WINDOW_SECONDS = 86400  # 24 hours
+# Was 30 minutes. The QEIC crawler runs every 10 minutes, and most of what
+# it checks (a company's current hiring status) doesn't meaningfully change
+# within 30 minutes - a 30-minute window meant re-storing an almost-identical
+# "still has 5 open roles" row dozens of times a day per company. Found live
+# in production: 8 watchlisted companies had accumulated 150-250 near-
+# duplicate JOB_POST_INTERCEPT rows each. A daily re-confirmation is enough
+# signal; sub-hourly re-confirmation of an unchanged fact is just noise.
 
 def is_duplicate_signal(domain: str, event_type: str) -> bool:
     """
