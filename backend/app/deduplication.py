@@ -1,43 +1,76 @@
-import time
 import logging
-from typing import Dict, Tuple
+import datetime
 
 logger = logging.getLogger("quanta.deduplication")
 
-# Memory cache for fast 30-minute deduplication: key (domain, event_type) -> timestamp
-RECENT_SIGNALS_CACHE: Dict[Tuple[str, str], float] = {}
 DEDUP_WINDOW_SECONDS = 1800  # 30 minutes
 
 def is_duplicate_signal(domain: str, event_type: str) -> bool:
     """
-    Checks if a signal for (domain, event_type) was received within the 30-minute deduplication window.
-    Returns True if duplicate, False if new.
+    Checks if a signal for (domain, event_type) was already stored within
+    the last 30 minutes.
+
+    DB-backed on purpose, not an in-memory cache. The original implementation
+    used an in-memory dict, which resets to empty on every process restart -
+    and this service gets restarted on every deploy. That silently defeated
+    deduplication exactly when it mattered: two identical SEC EDGAR funding
+    signals for the same real company (Nvision Capital Group) were found
+    live in production, created ~3 hours apart across two deploy restarts,
+    because the in-memory cache had "forgotten" the first one by the second
+    restart's startup discovery pass. Querying the real stored signals
+    instead means deduplication survives restarts the same way the data does.
     """
+    from app.crm import SessionLocal
+    from app.models import ExtensionSignalDB
+
     clean_domain = domain.lower().replace("www.", "").strip()
-    key = (clean_domain, event_type.upper().strip())
-    now = time.time()
-    
-    # Prune old cache entries
-    expired_keys = [k for k, ts in RECENT_SIGNALS_CACHE.items() if now - ts > DEDUP_WINDOW_SECONDS]
-    for k in expired_keys:
-        del RECENT_SIGNALS_CACHE[k]
-        
-    if key in RECENT_SIGNALS_CACHE:
-        last_time = RECENT_SIGNALS_CACHE[key]
-        if now - last_time < DEDUP_WINDOW_SECONDS:
-            logger.info(f"[Deduplication Engine] Suppressed duplicate signal for {clean_domain} [{event_type}] ({int(now - last_time)}s ago)")
+    clean_event_type = event_type.strip()
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(seconds=DEDUP_WINDOW_SECONDS)
+
+    db = SessionLocal()
+    try:
+        existing = db.query(ExtensionSignalDB).filter(
+            ExtensionSignalDB.domain == clean_domain,
+            ExtensionSignalDB.event_type.ilike(clean_event_type),
+            ExtensionSignalDB.created_at >= cutoff,
+        ).first()
+
+        if existing:
+            logger.info(f"[Deduplication Engine] Suppressed duplicate signal for {clean_domain} [{event_type}] (existing signal_id={existing.id})")
             try:
                 from app.telemetry import log_telemetry_event
                 log_telemetry_event(
                     tool_name="Deduplication Engine",
                     status="WARNING",
-                    raw_payload={"domain": clean_domain, "event_type": event_type, "time_since_last_sec": int(now - last_time)},
-                    raw_output={"suppressed": True, "action": "Slack alert and lead duplication blocked"}
+                    raw_payload={"domain": clean_domain, "event_type": event_type},
+                    raw_output={"suppressed": True, "existing_signal_id": existing.id, "existing_created_at": existing.created_at.isoformat() if existing.created_at else None}
                 )
             except Exception:
                 pass
             return True
-            
-    # Record new timestamp
-    RECENT_SIGNALS_CACHE[key] = now
-    return False
+
+        return False
+    finally:
+        db.close()
+
+def is_duplicate_citation(url: str) -> bool:
+    """
+    Permanent (no time window) check: has this exact citation URL already
+    been stored as a signal? For discrete, one-time real-world events with a
+    stable citation - a specific SEC filing, a specific Companies House
+    record - as opposed to is_duplicate_signal's 30-minute window, which
+    suits recurring/transient activity (new job posts legitimately appearing
+    on the same domain over time). SEC EDGAR and Companies House discovery
+    both re-scan overlapping date ranges every cycle (by design, to not miss
+    anything near a window boundary), so without this they would re-store
+    the same real filing every single cycle forever.
+    """
+    if not url:
+        return False
+    from app.crm import SessionLocal
+    from app.models import ExtensionSignalDB
+    db = SessionLocal()
+    try:
+        return db.query(ExtensionSignalDB).filter(ExtensionSignalDB.url == url).first() is not None
+    finally:
+        db.close()

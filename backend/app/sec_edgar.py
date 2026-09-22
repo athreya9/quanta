@@ -178,7 +178,7 @@ async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None
     """
     from app.companies import get_or_create_company, touch_last_signal
     from app.models import ExtensionSignalDB
-    from app.deduplication import is_duplicate_signal
+    from app.deduplication import is_duplicate_signal, is_duplicate_citation
     from app.scoring import calculate_multi_factor_intent_score, generate_real_problem_statement
     import json as json_module
 
@@ -206,7 +206,7 @@ async def discover_from_sec_edgar(db, icp_industries: Optional[List[str]] = None
             continue
         domain_verified += 1
 
-        if is_duplicate_signal(domain, "FUNDING_FILING"):
+        if is_duplicate_signal(domain, "FUNDING_FILING") or is_duplicate_citation(detail["filing_url"]):
             continue
 
         company = get_or_create_company(

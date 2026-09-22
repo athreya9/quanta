@@ -46,13 +46,29 @@ def _signal_to_citation(sig: ExtensionSignalDB) -> Dict[str, Any]:
 
 def draft_outreach_for_company(db: Session, company: CompanyDB, icp: ICPProfileDB) -> Dict[str, Any]:
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=SIGNAL_FRESHNESS_DAYS)
-    signals = (
+    candidate_signals = (
         db.query(ExtensionSignalDB)
         .filter(ExtensionSignalDB.company_id == company.id, ExtensionSignalDB.created_at >= cutoff)
         .order_by(ExtensionSignalDB.created_at.desc())
-        .limit(MAX_CITED_SIGNALS)
+        .limit(MAX_CITED_SIGNALS * 5)  # over-fetch so de-duping below can still fill MAX_CITED_SIGNALS distinct ones
         .all()
     )
+
+    # De-dupe by (source_url, event_type) - defense in depth. The real fix is
+    # DB-backed deduplication at ingest time (app.deduplication), but a draft
+    # must never cite the same real-world fact twice regardless of how a
+    # duplicate row got in - two identical bullet points citing the same SEC
+    # filing was a real bug found in production and is exactly what this guards.
+    seen = set()
+    signals = []
+    for s in candidate_signals:
+        key = (s.url, s.event_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        signals.append(s)
+        if len(signals) >= MAX_CITED_SIGNALS:
+            break
 
     if not signals:
         return {

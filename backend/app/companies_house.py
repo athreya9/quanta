@@ -113,7 +113,7 @@ async def discover_from_companies_house(db, industries: Optional[List[str]] = No
     of these can attach it properly via POST /api/v1/companies/seed.
     """
     from app.models import ExtensionSignalDB
-    from app.deduplication import is_duplicate_signal
+    from app.deduplication import is_duplicate_signal, is_duplicate_citation
     from app.scoring import calculate_multi_factor_intent_score
 
     if not _configured():
@@ -135,7 +135,7 @@ async def discover_from_companies_house(db, industries: Optional[List[str]] = No
         company_number = item["company_number"]
         profile_url = f"https://{citation_host}/company/{company_number}"
 
-        if is_duplicate_signal(company_number, "UK_REGISTRY_MATCH"):
+        if is_duplicate_signal(company_number, "UK_REGISTRY_MATCH") or is_duplicate_citation(profile_url):
             continue
 
         officers = await get_company_officers(company_number)
