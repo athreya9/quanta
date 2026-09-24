@@ -597,17 +597,21 @@ def draft_outreach_endpoint(company_id: int, icp_profile_id: int, db: Session = 
     return draft_outreach_for_company(db, company, icp)
 
 @app.post("/api/v1/discovery/sec-edgar")
-async def run_sec_edgar_discovery(days_back: int = 7, limit: int = 40, db: Session = Depends(get_db)):
+async def run_sec_edgar_discovery(days_back: int = 7, limit: int = 40, unfiltered: bool = False, db: Session = Depends(get_db)):
     """
     Triggers a real SEC EDGAR Form D discovery pass: recent private funding
     filings, ICP-filtered by industry when an active ICP profile exists,
     domain-verified before anything is stored. Free, no API key. `limit`
     controls how many real filings are actually examined (paged, not capped
     at the API's default first page) - raise it along with days_back to
-    pull more history in one pass.
+    pull more history in one pass. Pass unfiltered=true to skip the industry
+    filter entirely - useful for a project with a deliberately broad ICP
+    (e.g. "any company with a real growth signal, any industry"), which
+    needs discovery to cast a wide net; scoring still stays precise and
+    separate per project afterward via POST /api/v1/companies/rescore.
     """
     from app.sec_edgar import discover_from_sec_edgar
-    industry_keywords = icp_module.active_industry_keywords(db)
+    industry_keywords = None if unfiltered else icp_module.active_industry_keywords(db)
     res = await discover_from_sec_edgar(db, icp_industries=industry_keywords, days_back=days_back, limit=limit)
     res["industry_keywords_used"] = industry_keywords or "none (all active ICPs have no industry criteria - discovery is unfiltered)"
     return res
